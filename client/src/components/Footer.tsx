@@ -1,21 +1,57 @@
-import React from 'react';
+import { useState, useEffect } from 'react';
 
 const Footer = () => {
+  // State for real-time clock
+  const [currentTime, setCurrentTime] = useState('');
+
+  // Placeholder weather data for New Delhi (since we cannot fetch live data)
+  const DELHI_TIMEZONE = 'Asia/Kolkata';
+  const DELHI_LOCATION = 'NEW DELHI, INDIA';
+  const DELHI_WEATHER = '21°C AND CLEAR SKIES';
+
+  // Effect to update the clock every second
+  useEffect(() => {
+    const updateTime = () => {
+      // Format time for New Delhi in 12-hour format with AM/PM
+      const now = new Date();
+      const formattedTime = now.toLocaleTimeString('en-US', {
+        timeZone: DELHI_TIMEZONE,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+      }).toUpperCase();
+      setCurrentTime(formattedTime);
+    };
+
+    // Initial call
+    updateTime();
+
+    // Set up interval for continuous updates
+    const timerId = setInterval(updateTime, 1000);
+
+    // Cleanup function to clear the interval when the component unmounts
+    return () => clearInterval(timerId);
+  }, []);
+
   return (
-    <footer className="bg-[#C4A574] text-black px-6 sm:px-12 py-12">
+    // Updated background color to-[#7A9B7E]
+    <footer className="bg-[#7A9B7E] text-black px-6 sm:px-12 py-12 font-sans">
       <div className="max-w-7xl mx-auto">
+        
         {/* Top Section */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-16 gap-8">
-          {/* Left - Location & Weather */}
+          
+          {/* Left - Real-time Clock & Location */}
           <div className="text-xs sm:text-sm space-y-1">
-            <div className="font-mono">11:31:17AM</div>
-            <div className="font-mono">LOS ANGELES, CA</div>
-            <div className="font-mono">66° AND HAZE</div>
+            <div className="font-mono font-bold text-gray-900">{currentTime}</div> {/* Live Time */}
+            <div className="font-mono">{DELHI_LOCATION}</div> {/* Updated Location */}
+            <div className="font-mono">{DELHI_WEATHER}</div> {/* Updated Weather */}
           </div>
 
           {/* Center - Newsletter */}
           <div className="flex-1 max-w-md">
-            <p className="text-xs sm:text-sm mb-3 leading-relaxed">
+            <p className="text-xs sm:text-sm mb-3 leading-relaxed tracking-wide font-medium">
               SUBSCRIBE TO OUR NEWSLETTER TO RECEIVE A<br />
               FIRST LOOK AT NEW EVENTS & GOODS
             </p>
@@ -23,16 +59,16 @@ const Footer = () => {
               <input
                 type="email"
                 placeholder="Your Email"
-                className="flex-1 bg-transparent outline-none text-sm placeholder-black/60"
+                className="flex-1 bg-transparent outline-none text-sm placeholder-black/60 focus:placeholder-transparent"
               />
-              <button className="text-xs sm:text-sm font-medium hover:opacity-70 transition-opacity">
+              <button className="text-xs sm:text-sm font-medium hover:opacity-80 transition-opacity uppercase tracking-wider">
                 SUBMIT
               </button>
             </div>
           </div>
 
           {/* Right - Links */}
-          <div className="flex gap-8 sm:gap-12 text-xs sm:text-sm">
+          <div className="flex gap-8 sm:gap-12 text-xs sm:text-sm tracking-widest font-medium uppercase">
             <div className="space-y-2">
               <a href="#" className="block hover:opacity-70 transition-opacity">EVENTS</a>
               <a href="#" className="block hover:opacity-70 transition-opacity">SHOP</a>
@@ -49,26 +85,24 @@ const Footer = () => {
         {/* Large Brand Text */}
         <div className="relative mb-8">
           <div className="flex items-center justify-center">
-            <h1 className="text-[120px] sm:text-[180px] md:text-[240px] lg:text-[320px] font-bold leading-none tracking-tight">
-              Usal
+            {/* Adjusted font sizing for better responsiveness and visibility */}
+            <h1 className="text-[70px] sm:text-[120px] md:text-[180px] lg:text-[230px] xl:text-[290px] font-extrabold leading-none tracking-tight">
+              VOXY
             </h1>
-            <div className="absolute right-0 sm:right-12 top-0 sm:top-4 w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full border-4 border-black flex items-center justify-center">
-              <span className="text-2xl sm:text-3xl md:text-4xl font-bold">R</span>
-            </div>
           </div>
         </div>
 
         {/* Bottom Section */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-xs">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 text-[10px] sm:text-xs tracking-wider uppercase">
           <div className="font-mono">
-            © 2024 USAL 3021 ROWENA AVE LOS ANGELES CA 90039
+            © 2025 VOXY MATCH. CHAT. SPEAK. LEARN
           </div>
-          <div className="flex gap-4 sm:gap-6">
+          <div className="flex gap-4 sm:gap-6 font-medium">
             <a href="#" className="hover:opacity-70 transition-opacity">PRIVACY POLICY</a>
             <span>•</span>
             <a href="#" className="hover:opacity-70 transition-opacity">TERMS OF SERVICE</a>
           </div>
-          <a href="#" className="hover:opacity-70 transition-opacity underline">
+          <a href="#" className="hover:opacity-70 transition-opacity underline font-medium">
             SITE CREDIT
           </a>
         </div>
