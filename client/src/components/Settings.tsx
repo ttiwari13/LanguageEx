@@ -29,8 +29,8 @@ const Settings = () => {
   const [newInterest, setNewInterest] = useState("");
 
   // Cloudinary configuration
-  const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "dz3wmydp0";
-  const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "language-app-profiles";
+  const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME ;
+  const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
   // Fetch user data on component mount
   useEffect(() => {
