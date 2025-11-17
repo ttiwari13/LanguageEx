@@ -6,13 +6,13 @@ const userController = {
   async signup(req, res) {
     try {
       const {
-  name,
-  username,
-  email,
-  password,
-  offeringLanguage,  
-  seekingLanguage,  
-} = req.body;
+        name,
+        username,
+        email,
+        password,
+        offeringLanguage,  
+        seekingLanguage,  
+      } = req.body;
       if (!name || !username || !email || !password) {
         return res.status(400).json({ message: "All fields are required" });
       }
@@ -62,6 +62,7 @@ const userController = {
       res.status(500).json({ message: "Server error during signup" });
     }
   },
+  
   async login(req, res) {
     try {
       const { username, password } = req.body;
@@ -82,7 +83,7 @@ const userController = {
         { expiresIn: "7d" }
       );
 
-      const { password: _, ...userData } = user; //object destructure in which the we remove the password from the user and make another userdata which has all remaining properties except password ready to send to frontend
+      const { password: _, ...userData } = user;
       res.status(200).json({
         message: "Login successful",
         user: userData,
@@ -103,9 +104,9 @@ const userController = {
       res.status(500).json({ message: "Server error during login" });
     }
   },
+  
   async getProfile(req, res) {
     try {
-      // req.user comes from protect middleware
       const userId = req.user.id;
       
       const user = await User.getUserById(userId);
@@ -114,7 +115,6 @@ const userController = {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Remove password from response
       const { password, ...userWithoutPassword } = user;
       
       res.status(200).json(userWithoutPassword);
@@ -124,9 +124,9 @@ const userController = {
       res.status(500).json({ message: 'Failed to fetch profile' });
     }
   },
+  
   async updateProfile(req, res) {
     try {
-      // req.user comes from protect middleware
       const userId = req.user.id;
       
       const { 
@@ -135,10 +135,43 @@ const userController = {
         location, 
         offering_language, 
         seeking_language, 
-        interests 
+        interests,
+        currentPassword,
+        newPassword
       } = req.body;
       
-      // Update user profile
+      // If user wants to change password
+      if (currentPassword && newPassword) {
+        console.log('Password change requested for user:', userId);
+        
+        // Get user with password - need to fetch with password field
+        const userWithPassword = await User.getUserByIdWithPassword(userId);
+        
+        if (!userWithPassword) {
+          return res.status(404).json({ message: 'User not found' });
+        }
+        
+        console.log('Current password from DB (hashed):', userWithPassword.password);
+        console.log('Provided current password:', currentPassword);
+        
+        // Verify current password
+        const isPasswordValid = await bcrypt.compare(currentPassword, userWithPassword.password);
+        console.log('Password validation result:', isPasswordValid);
+        
+        if (!isPasswordValid) {
+          return res.status(401).json({ message: 'Current password is incorrect' });
+        }
+        
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        console.log('New password hashed:', hashedPassword);
+        
+        // Update password in database
+        const passwordUpdateResult = await User.updatePassword(userId, hashedPassword);
+        console.log('Password update result:', passwordUpdateResult);
+      }
+      
+      // Update other profile fields
       const updatedUser = await User.updateProfile(userId, {
         name,
         username,
@@ -152,7 +185,6 @@ const userController = {
         return res.status(404).json({ message: 'User not found' });
       }
 
-      // Remove password from response
       const { password, ...userWithoutPassword } = updatedUser;
       
       res.status(200).json({
@@ -163,7 +195,6 @@ const userController = {
     } catch (error) {
       console.error('Error updating profile:', error);
       
-      // Handle duplicate username error
       if (error.code === '23505') {
         return res.status(409).json({ message: 'Username already taken' });
       }

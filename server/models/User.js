@@ -44,7 +44,7 @@ const pool = require("../configs/db");
 })();
 
 const User = {
-  // Existing methods
+  // Create new user
   async createUser(name, username, email, password, offering_language, seeking_language) {
     const query = `
       INSERT INTO users (name, username, email, password, offering_language, seeking_language)
@@ -56,25 +56,18 @@ const User = {
     return result.rows[0];
   },
 
+  // Get user by email
   async getUserByEmail(email) {
     const result = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
     return result.rows[0];
   },
 
+  // Get user by username
   async getUserByUsername(username) {
     const result = await pool.query(`SELECT * FROM users WHERE username = $1`, [username]);
     return result.rows[0];
   },
 
-  async getAllUsers() {
-    const result = await pool.query(`
-      SELECT id, name, username, email, offering_language, seeking_language,
-             profile_image_public_id, location, interests, is_online, last_seen
-      FROM users
-      ORDER BY is_online DESC, last_seen DESC
-    `);
-    return result.rows;
-  },
   async getUserById(id) {
     const result = await pool.query(
       `SELECT id, name, username, email, offering_language, seeking_language, 
@@ -86,27 +79,46 @@ const User = {
     return result.rows[0];
   },
 
-  async updateProfileImage(userId, publicId) {
-    const query = `
-      UPDATE users 
-      SET profile_image_public_id = $1,
-          profile_image_uploaded_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      RETURNING id, profile_image_public_id, profile_image_uploaded_at;
-    `;
-    const result = await pool.query(query, [publicId, userId]);
+  // Get user by ID WITH password (for password verification)
+  async getUserByIdWithPassword(id) {
+    const result = await pool.query(
+      `SELECT * FROM users WHERE id = $1`,
+      [id]
+    );
     return result.rows[0];
   },
 
-  async getProfileImagePublicId(userId) {
-    const result = await pool.query(
-      `SELECT profile_image_public_id FROM users WHERE id = $1`,
-      [userId]
-    );
-    return result.rows[0]?.profile_image_public_id;
+  // Get all users
+  async getAllUsers() {
+    const result = await pool.query(`
+      SELECT id, name, username, email, offering_language, seeking_language,
+             profile_image_public_id, location, interests, is_online, last_seen
+      FROM users
+      ORDER BY is_online DESC, last_seen DESC
+    `);
+    return result.rows;
   },
 
+  // Update password
+  async updatePassword(userId, hashedPassword) {
+    try {
+      const query = `
+        UPDATE users 
+        SET password = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING id, username;
+      `;
+      
+      const result = await pool.query(query, [hashedPassword, userId]);
+      console.log('Password updated in DB for user:', result.rows[0]);
+      return result.rows[0];
+    } catch (error) {
+      console.error('Error in updatePassword:', error);
+      throw error;
+    }
+  },
+
+  // Update profile (without password)
   async updateProfile(userId, updates) {
     const { name, username, location, offering_language, seeking_language, interests } = updates;
     
@@ -137,6 +149,30 @@ const User = {
     return result.rows[0];
   },
 
+  // Update profile image
+  async updateProfileImage(userId, publicId) {
+    const query = `
+      UPDATE users 
+      SET profile_image_public_id = $1,
+          profile_image_uploaded_at = CURRENT_TIMESTAMP,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING id, profile_image_public_id, profile_image_uploaded_at;
+    `;
+    const result = await pool.query(query, [publicId, userId]);
+    return result.rows[0];
+  },
+
+  // Get profile image public ID
+  async getProfileImagePublicId(userId) {
+    const result = await pool.query(
+      `SELECT profile_image_public_id FROM users WHERE id = $1`,
+      [userId]
+    );
+    return result.rows[0]?.profile_image_public_id;
+  },
+
+  // Update online status
   async updateOnlineStatus(userId, isOnline) {
     const query = `
       UPDATE users 
@@ -149,6 +185,7 @@ const User = {
     return result.rows[0];
   },
 
+  // Remove profile image
   async removeProfileImage(userId) {
     const query = `
       UPDATE users 
@@ -162,6 +199,7 @@ const User = {
     return result.rows[0];
   },
 
+  // Get filtered users
   async getFilteredUsers(filters = {}) {
     const { seeking_language, offering_language, is_online, limit = 20, offset = 0 } = filters;
     

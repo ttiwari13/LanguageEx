@@ -30,7 +30,7 @@ const Settings = () => {
 
   // Cloudinary configuration
   const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME ;
-  const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+  //const CLOUDINARY_UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
 
   // Fetch user data on component mount
   useEffect(() => {
@@ -159,35 +159,67 @@ const Settings = () => {
   };
 
   const handleSave = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      
-      const response = await fetch('http://localhost:4000/api/users/update', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          username: formData.username,
-          location: formData.location,
-          offering_language: formData.offeredLanguage,
-          seeking_language: formData.seekingLanguage,
-          interests: interests,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to update profile');
+  try {
+    // Validate password fields if user wants to change password
+    if (formData.currentPassword || formData.newPassword || formData.confirmPassword) {
+      if (!formData.currentPassword) {
+        alert('Please enter your current password');
+        return;
       }
-
-      alert('Profile updated successfully!');
-    } catch (error) {
-      console.error('Save error:', error);
-      alert('Failed to save profile. Please try again.');
+      if (!formData.newPassword) {
+        alert('Please enter a new password');
+        return;
+      }
+      if (formData.newPassword !== formData.confirmPassword) {
+        alert('New passwords do not match');
+        return;
+      }
+      if (formData.newPassword.length < 6) {
+        alert('New password must be at least 6 characters long');
+        return;
+      }
     }
-  };
+
+    const token = localStorage.getItem('token');
+    
+    const response = await fetch('http://localhost:4000/api/users/update', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        name: formData.name,
+        username: formData.username,
+        location: formData.location,
+        offering_language: formData.offeredLanguage,
+        seeking_language: formData.seekingLanguage,
+        interests: interests,
+        currentPassword: formData.currentPassword || undefined,
+        newPassword: formData.newPassword || undefined,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to update profile');
+    }
+
+    alert('Profile updated successfully!');
+    
+    // Clear password fields after successful update
+    setFormData({
+      ...formData,
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    });
+    
+  } catch (error) {
+    console.error('Save error:', error);
+    alert(error instanceof Error ? error.message : 'Failed to save profile. Please try again.');
+  }
+};
 
   const handleLogout = () => {
     const confirmLogout = window.confirm("Are you sure you want to log out?");
@@ -198,10 +230,6 @@ const Settings = () => {
     }
   };
   
-  const handleForgotPassword = () => {
-    alert("Password reset link sent to your email!");
-  };
-
   const handleInterestKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -295,7 +323,7 @@ const Settings = () => {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
+              <label className="block text-sm text-gray-400 mb-2 items-center gap-2">
                 <Mail size={16} /> Email
               </label>
               <input
@@ -309,7 +337,7 @@ const Settings = () => {
               />
             </div>
             <div>
-              <label className="block text-sm text-gray-400 mb-2 flex items-center gap-2">
+              <label className="block text-sm text-gray-400 mb-2 items-center gap-2">
                 <MapPin size={16} /> Location
               </label>
               <input
@@ -461,12 +489,6 @@ const Settings = () => {
                 </button>
               </div>
             </div>
-            <button
-              onClick={handleForgotPassword}
-              className="text-purple-400 hover:text-purple-300 text-sm transition-colors"
-            >
-              Forgot Password?
-            </button>
           </div>
         </div>
 
