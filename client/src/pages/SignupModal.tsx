@@ -199,7 +199,7 @@ export default function SignupModal({ isOpen, onClose, onLoginClick }: SignupMod
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 backdrop-blur-sm overflow-y-auto py-8 z-50">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="bg-gradient-to-r from-purple-600 to-blue-600 p-6 relative">
+        <div className="bg-gradient-to-r from-[#8B9D7C] to-[#97a88a] p-6 relative">
           <button
             onClick={onClose}
             className="absolute top-4 right-4 text-white hover:bg-white hover:bg-opacity-20 rounded-full p-2 transition-all"
@@ -318,7 +318,7 @@ export default function SignupModal({ isOpen, onClose, onLoginClick }: SignupMod
           
 <div className="border-t pt-4 mt-4">
   <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
-    <Globe size={20} className="text-purple-600" />
+    <Globe size={20} className="text-[#8B9D7C]" />
     Language Preferences
   </h3>
 
@@ -368,7 +368,7 @@ export default function SignupModal({ isOpen, onClose, onLoginClick }: SignupMod
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="w-full bg-gradient-to-r from-purple-600 to-blue-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:scale-105 transition-all duration-200 mt-6 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
+            className="w-full bg-gradient-to-r from-[#8B9D7C] to-[#8B9D7C] text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:scale-105 transition-all duration-200 mt-6 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
@@ -387,7 +387,7 @@ export default function SignupModal({ isOpen, onClose, onLoginClick }: SignupMod
             Already have an account?{' '}
             <span 
               onClick={isLoading ? undefined : onLoginClick}
-              className={`text-purple-600 font-semibold hover:underline ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+              className={`text-[#8B9D7C] font-semibold hover:underline ${isLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
             >
               Log In
             </span>

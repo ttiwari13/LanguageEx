@@ -103,6 +103,74 @@ const userController = {
       res.status(500).json({ message: "Server error during login" });
     }
   },
+  async getProfile(req, res) {
+    try {
+      // req.user comes from protect middleware
+      const userId = req.user.id;
+      
+      const user = await User.getUserById(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      
+      res.status(200).json(userWithoutPassword);
+      
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      res.status(500).json({ message: 'Failed to fetch profile' });
+    }
+  },
+  async updateProfile(req, res) {
+    try {
+      // req.user comes from protect middleware
+      const userId = req.user.id;
+      
+      const { 
+        name, 
+        username, 
+        location, 
+        offering_language, 
+        seeking_language, 
+        interests 
+      } = req.body;
+      
+      // Update user profile
+      const updatedUser = await User.updateProfile(userId, {
+        name,
+        username,
+        location,
+        offering_language,
+        seeking_language,
+        interests,
+      });
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Remove password from response
+      const { password, ...userWithoutPassword } = updatedUser;
+      
+      res.status(200).json({
+        message: 'Profile updated successfully',
+        user: userWithoutPassword,
+      });
+      
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      
+      // Handle duplicate username error
+      if (error.code === '23505') {
+        return res.status(409).json({ message: 'Username already taken' });
+      }
+      
+      res.status(500).json({ message: 'Failed to update profile' });
+    }
+  },
 };
 
 module.exports = userController;

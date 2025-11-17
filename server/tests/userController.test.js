@@ -25,7 +25,7 @@ describe("User Controller", () => {
   });
 
   test("should signup successfully and return token", async () => {
-    User.getUserByEmail.mockResolvedValueOnce(null);
+    User.getUserByEmail.mockResolvedValueOnce(null); //tell existing user not exist
     User.createUser.mockResolvedValueOnce({
       id: 1,
       name: "Tani",
