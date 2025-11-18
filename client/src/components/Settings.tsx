@@ -425,72 +425,70 @@ const Settings = () => {
             )}
           </div>
         </div>
-
-        {/* Change Password */}
-        <div className="bg-gray-800 rounded-2xl p-6 mb-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-            <Lock size={24} /> Change Password
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Current Password</label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  name="currentPassword"
-                  value={formData.currentPassword}
-                  onChange={handleInputChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all pr-12"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">New Password</label>
-              <div className="relative">
-                <input
-                  type={showNewPassword ? "text" : "password"}
-                  name="newPassword"
-                  value={formData.newPassword}
-                  onChange={handleInputChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all pr-12"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-2">Confirm New Password</label>
-              <div className="relative">
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  name="confirmPassword"
-                  value={formData.confirmPassword}
-                  onChange={handleInputChange}
-                  className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all pr-12"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
-                >
-                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+<div className="bg-gray-800 rounded-2xl p-6 mb-6">
+  <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+    <Lock size={24} /> Change Password
+  </h2>
+  <div className="space-y-4">
+    <div>
+      <label className="block text-sm text-gray-400 mb-2">Current Password</label>
+      <div className="relative">
+        <input
+          type={showPassword ? "text" : "password"}
+          name="currentPassword"
+          value={formData.currentPassword}
+          onChange={handleInputChange}
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all pr-12"
+        />
+        <button
+          type="button"
+          onClick={() => setShowPassword(!showPassword)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+        >
+          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+        </button>
+      </div>
+    </div>
+    <div>
+      <label className="block text-sm text-gray-400 mb-2">New Password</label>
+      <div className="relative">
+        <input
+          type={showNewPassword ? "text" : "password"}
+          name="newPassword"
+          value={formData.newPassword}
+          onChange={handleInputChange}
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all pr-12"
+        />
+        <button
+          type="button"
+          onClick={() => setShowNewPassword(!showNewPassword)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+        >
+          {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+        </button>
+      </div>
+    </div>
+    <div>
+      <label className="block text-sm text-gray-400 mb-2">Confirm New Password</label>
+      <div className="relative">
+        <input
+          type={showConfirmPassword ? "text" : "password"}
+          name="confirmPassword"
+          value={formData.confirmPassword}
+          onChange={handleInputChange}
+          className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-purple-500 transition-all pr-12"
+        />
+        <button
+          type="button"
+          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+        >
+          {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-700">
