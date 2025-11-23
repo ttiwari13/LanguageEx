@@ -1,0 +1,14 @@
+const express = require('express');
+const router = express.Router();
+const friendController = require('../controllers/friendController');
+const authMiddleware = require('../middlewares/authMiddleware'); 
+router.post('/friends/send', authMiddleware, friendController.send);
+router.post('/friends/accept', authMiddleware, friendController.accept);
+router.post('/friends/reject', authMiddleware, friendController.reject);
+router.get('/friends/incoming', authMiddleware, friendController.incoming);
+router.get('/friends/pending', authMiddleware, friendController.pending);
+router.get('/friends/list', authMiddleware, friendController.friends);
+router.delete('/friends/cancel/:receiverId', authMiddleware, friendController.cancel);
+router.delete('/friends/unfriend/:friendId', authMiddleware, friendController.unfriend);
+
+module.exports = router;

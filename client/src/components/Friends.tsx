@@ -1,206 +1,302 @@
-import React, { useState } from 'react';
+import { useEffect, useState } from "react";
+import axios from "axios";
 
-// --- TS Interfaces (Keeping them clean) ---
 interface FriendRequest {
   id: number;
-  senderName: string;
+  sender_id?: number;
+  receiver_id?: number;
+  name: string;
+  username: string;
+  profile_image_public_id?: string;
 }
 
-interface User {
+interface Friend {
   id: number;
   name: string;
+  username: string;
+  profile_image_public_id?: string;
 }
-// --- End Interfaces ---
 
-const Friends: React.FC = () => {
-  // Static data
-  const [pendingRequests] = useState<FriendRequest[]>([
-    { id: 101, senderName: 'Alex Johnson' },
-    { id: 102, senderName: 'Sarah Connor' },
-    { id: 103, senderName: 'Mike Ross' },
-  ]);
+export default function FriendsDashboard() {
+  const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
+  const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"friends" | "incoming" | "outgoing">("incoming");
 
-  const [availableUsers] = useState<User[]>([
-    { id: 201, name: 'Jessie Pinkman' },
-    { id: 202, name: 'Walter White' },
-    { id: 203, name: 'Skyler White' },
-    { id: 204, name: 'Gus Fring' },
-    { id: 205, name: 'Hank Schrader' },
-  ]);
-
-  const [searchTerm, setSearchTerm] = useState<string>('');
-
-  // Placeholder Handlers
-  const handleSendRequest = (userId: number): void => {
-    console.log(`[UI Action]: Request sent to user ID: ${userId}`);
-  };
-
-  const handleAcceptRequest = (requestId: number): void => {
-    console.log(`[UI Action]: Accepted request ID: ${requestId}`);
-  };
-
-  const handleRejectRequest = (requestId: number): void => {
-    console.log(`[UI Action]: Rejected request ID: ${requestId}`);
-  };
-
-  const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    setSearchTerm(event.target.value);
-  };
-
-  // --- STYLES DEFINITION (Centralized for better readability) ---
-  const styles = {
-    container: {
-      maxWidth: '900px',
-      margin: '40px auto',
-      padding: '30px',
-      fontFamily: 'Segoe UI, Roboto, Arial, sans-serif',
-      backgroundColor: '#f9f9f9',
-      borderRadius: '12px',
-      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
-    },
-    section: {
-      backgroundColor: '#ffffff',
-      padding: '25px',
-      borderRadius: '8px',
-      marginBottom: '30px',
-      boxShadow: '0 2px 10px rgba(0, 0, 0, 0.05)',
-    },
-    heading: {
-      color: '#333',
-      borderBottom: '2px solid #007bff',
-      paddingBottom: '10px',
-      marginBottom: '20px',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '10px',
-    },
-    listItem: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '12px 0',
-      borderBottom: '1px solid #f0f0f0',
-      transition: 'background-color 0.2s',
-    },
-    list: {
-      listStyleType: 'none',
-      padding: 0,
-    },
-    buttonBase: {
-      padding: '8px 15px',
-      borderRadius: '6px',
-      border: 'none',
-      cursor: 'pointer',
-      fontSize: '14px',
-      transition: 'background-color 0.2s',
-      fontWeight: 600,
-      marginLeft: '10px',
-    },
-    acceptButton: {
-      backgroundColor: '#28a745',
-      color: 'white',
-    },
-    rejectButton: {
-      backgroundColor: '#dc3545',
-      color: 'white',
-    },
-    sendButton: {
-      backgroundColor: '#007bff',
-      color: 'white',
-    },
-    searchInput: {
-      width: '100%',
-      padding: '12px 15px',
-      marginBottom: '15px',
-      borderRadius: '6px',
-      border: '1px solid #ced4da',
-      fontSize: '16px',
-      boxSizing: 'border-box' as const, // Important for full width padding
-    },
-    emptyMessage: {
-        color: '#6c757d',
-        padding: '10px 0',
-        fontStyle: 'italic',
+  const fetchAllData = async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem("token");
+      if (!token) return;
+      const incomingRes = await axios.get(
+        "http://localhost:4000/api/friends/incoming",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setIncomingRequests(incomingRes.data || []);
+      const outgoingRes = await axios.get(
+        "http://localhost:4000/api/friends/pending",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setOutgoingRequests(outgoingRes.data || []);
+      const friendsRes = await axios.get(
+        "http://localhost:4000/api/friends/list",
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      setFriends(friendsRes.data || []);
+    } catch (err) {
+      console.error("Error fetching friends data:", err);
+    } finally {
+      setLoading(false);
     }
   };
-  // --- END STYLES DEFINITION ---
 
+  useEffect(() => {
+    fetchAllData();
+  }, []);
+
+  const handleAccept = async (requestId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(
+        "http://localhost:4000/api/friends/accept",
+        { request_id: requestId },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      alert("Friend request accepted!");
+      fetchAllData(); // Refresh data
+    } catch (err) {
+      console.error("Accept error:", err);
+      alert("Failed to accept request");
+    }
+  };
+
+  const handleReject = async (requestId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.post(
+        "http://localhost:4000/api/friends/reject",
+        { request_id: requestId },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      alert("Friend request rejected!");
+      fetchAllData();
+    } catch (err) {
+      console.error("Reject error:", err);
+      alert("Failed to reject request");
+    }
+  };
+
+  const handleCancel = async (receiverId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(
+        `http://localhost:4000/api/friends/cancel/${receiverId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      alert("Request cancelled!");
+      fetchAllData();
+    } catch (err) {
+      console.error("Cancel error:", err);
+      alert("Failed to cancel request");
+    }
+  };
+
+  const handleUnfriend = async (friendId: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      await axios.delete(
+        `http://localhost:4000/api/friends/unfriend/${friendId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      alert("Unfriended successfully!");
+      fetchAllData();
+    } catch (err) {
+      console.error("Unfriend error:", err);
+      alert("Failed to unfriend");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
+        <div className="text-2xl">Loading...</div>
+      </div>
+    );
+  }
 
   return (
-    <div style={styles.container}>
-      <h1 style={{ color: '#1a1a1a', textAlign: 'center', marginBottom: '40px' }}>
-         Social Hub
-      </h1>
-      <div style={styles.section}>
-        <h2 style={styles.heading as React.CSSProperties}>
-          Requests Received ({pendingRequests.length})
-        </h2>
-        
-        {pendingRequests.length > 0 ? (
-          <ul style={styles.list}>
-            {pendingRequests.map((request: FriendRequest) => (
-              <li key={request.id} style={styles.listItem}>
-                <span style={{ fontWeight: 500, color: '#333' }}>{request.senderName}</span>
-                <div>
-                  <button 
-                    onClick={() => handleAcceptRequest(request.id)}
-                    style={{ ...styles.buttonBase, ...styles.acceptButton }}
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <h1 className="text-4xl font-bold mb-8">Friends</h1>
+
+      {/* Tabs */}
+      <div className="flex gap-4 mb-8 border-b border-gray-700">
+        <button
+          onClick={() => setActiveTab("incoming")}
+          className={`px-6 py-3 font-semibold transition ${
+            activeTab === "incoming"
+              ? "border-b-2 border-blue-500 text-blue-500"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          Incoming Requests ({incomingRequests.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("friends")}
+          className={`px-6 py-3 font-semibold transition ${
+            activeTab === "friends"
+              ? "border-b-2 border-blue-500 text-blue-500"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          Friends ({friends.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("outgoing")}
+          className={`px-6 py-3 font-semibold transition ${
+            activeTab === "outgoing"
+              ? "border-b-2 border-blue-500 text-blue-500"
+              : "text-gray-400 hover:text-white"
+          }`}
+        >
+          Sent Requests ({outgoingRequests.length})
+        </button>
+      </div>
+
+      {/* Incoming Requests */}
+      {activeTab === "incoming" && (
+        <div className="space-y-4">
+          {incomingRequests.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">No incoming requests</p>
+          ) : (
+            incomingRequests.map((req) => (
+              <div
+                key={req.id}
+                className="bg-gray-800 rounded-lg p-5 flex items-center justify-between hover:bg-gray-750 transition"
+              >
+                <div className="flex items-center gap-4">
+                  <img
+                    src={
+                      req.profile_image_public_id
+                        ? `https://res.cloudinary.com/demo/image/upload/${req.profile_image_public_id}`
+                        : "/default_profile.png"
+                    }
+                    alt={req.name}
+                    className="w-16 h-16 rounded-full object-cover"
+                  />
+                  <div>
+                    <h3 className="text-xl font-semibold">{req.name}</h3>
+                    <p className="text-gray-400">@{req.username}</p>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleAccept(req.id)}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium"
                   >
                     Accept
                   </button>
-                  <button 
-                    onClick={() => handleRejectRequest(request.id)}
-                    style={{ ...styles.buttonBase, ...styles.rejectButton }}
+                  <button
+                    onClick={() => handleReject(req.id)}
+                    className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition font-medium"
                   >
-                    Reject
+                    Decline
                   </button>
                 </div>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p style={styles.emptyMessage}>You are all caught up! No new friend requests.</p>
-        )}
-      </div>
-      <div style={styles.section}>
-        <h2 style={styles.heading as React.CSSProperties}>
-           Find New Connections
-        </h2>
-        <input
-          type="text"
-          placeholder="Search for names or usernames..."
-          value={searchTerm}
-          onChange={handleSearchChange}
-          style={styles.searchInput}
-        />
+              </div>
+            ))
+          )}
+        </div>
+      )}
 
-        <h3 style={{ color: '#555', marginTop: '30px', marginBottom: '15px', fontSize: '18px' }}>
-            Suggested People
-        </h3>
-        
-        <ul style={styles.list}>
-          {availableUsers
-            .filter((user: User) => user.name.toLowerCase().includes(searchTerm.toLowerCase()))
-            .map((user: User) => (
-              <li 
-                key={user.id}
-                style={styles.listItem}
+      {/* Friends List */}
+      {activeTab === "friends" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {friends.length === 0 ? (
+            <p className="text-gray-400 text-center py-8 col-span-full">No friends yet</p>
+          ) : (
+            friends.map((friend) => (
+              <div
+                key={friend.id}
+                className="bg-gray-800 rounded-lg p-5 hover:bg-gray-750 transition"
               >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#333' }}>
-                     {user.name}
-                </span>
-                <button 
-                  onClick={() => handleSendRequest(user.id)}
-                  style={{ ...styles.buttonBase, ...styles.sendButton }}
+                <div className="flex flex-col items-center">
+                  <img
+                    src={
+                      friend.profile_image_public_id
+                        ? `https://res.cloudinary.com/demo/image/upload/${friend.profile_image_public_id}`
+                        : "/default_profile.png"
+                    }
+                    alt={friend.name}
+                    className="w-24 h-24 rounded-full object-cover mb-4"
+                  />
+                  <h3 className="text-xl font-semibold text-center">{friend.name}</h3>
+                  <p className="text-gray-400 text-center mb-4">@{friend.username}</p>
+                  <button
+                    onClick={() => handleUnfriend(friend.id)}
+                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg transition font-medium"
+                  >
+                    Unfriend
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Outgoing Requests */}
+      {activeTab === "outgoing" && (
+        <div className="space-y-4">
+          {outgoingRequests.length === 0 ? (
+            <p className="text-gray-400 text-center py-8">No pending requests</p>
+          ) : (
+            outgoingRequests.map((req) => (
+              <div
+                key={req.id}
+                className="bg-gray-800 rounded-lg p-5 flex items-center justify-between hover:bg-gray-750 transition"
+              >
+                <div className="flex items-center gap-4">
+                  <img
+                    src={
+                      req.profile_image_public_id
+                        ? `https://res.cloudinary.com/demo/image/upload/${req.profile_image_public_id}`
+                        : "/default_profile.png"
+                    }
+                    alt={req.name}
+                    className="w-16 h-16 rounded-full object-cover"
+                  />
+                  <div>
+                    <h3 className="text-xl font-semibold">{req.name}</h3>
+                    <p className="text-gray-400">@{req.username}</p>
+                    <p className="text-sm text-gray-500">Request pending</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleCancel(req.receiver_id!)}
+                  className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition font-medium"
                 >
-                   Send Request
+                  Cancel Request
                 </button>
-              </li>
-            ))}
-        </ul>
-      </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
-
-export default Friends;

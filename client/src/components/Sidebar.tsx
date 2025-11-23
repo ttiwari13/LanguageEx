@@ -1,13 +1,10 @@
 import { NavLink } from "react-router-dom";
 import { Home, MessageCircle, Camera, User2, Settings2, X } from "lucide-react";
 
-// Add this interface at the top
 interface SidebarProps { 
   onClose?: () => void;
   compact?: boolean;
 }
-
-// Update the component to accept props
 const Sidebar = ({ onClose, compact = false }: SidebarProps) => {
   const items = [
     { icon: <Home size={22} />, label: "Home", path: "/" },
@@ -29,14 +26,6 @@ const Sidebar = ({ onClose, compact = false }: SidebarProps) => {
             <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center text-xl font-bold">
               F
             </div>
-          )}
-          {onClose && (
-            <button
-              className="md:hidden text-gray-400 hover:text-white transition-colors"
-              onClick={onClose}
-            >
-              <X size={24} />
-            </button>
           )}
         </div>
       </div>
