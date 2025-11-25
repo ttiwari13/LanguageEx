@@ -1,4 +1,11 @@
 const pool = require("../configs/db");
+const cloudinary = require('cloudinary').v2;
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 const Message = {
   async initTable() {
@@ -15,7 +22,13 @@ const Message = {
           is_read BOOLEAN DEFAULT FALSE
         );
       `);
-
+      
+      await pool.query(`
+        ALTER TABLE messages 
+        ADD COLUMN IF NOT EXISTS audio_duration INT,
+        ADD COLUMN IF NOT EXISTS cloudinary_audio_id TEXT;
+      `);
+      
       await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_messages_chat_room ON messages(chat_room_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC);
@@ -26,7 +39,7 @@ const Message = {
     }
   },
 
-  // Create a new message
+  // Create a new text message
   async createMessage(chatRoomId, senderId, messageType, content, audioUrl = null) {
     try {
       const result = await pool.query(
@@ -43,6 +56,55 @@ const Message = {
       throw error;
     }
   },
+
+  // Upload audio to Cloudinary
+  uploadAudioToCloudinary(buffer) {
+    return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'video',
+          folder: 'langex/audio_messages',
+          format: 'mp3'
+        },
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }
+      );
+      uploadStream.end(buffer);
+    });
+  },
+
+  // Create audio message
+  async createAudioMessage(chatRoomId, senderId, audioBuffer) {
+    try {
+      // Upload audio to Cloudinary
+      const uploadResult = await this.uploadAudioToCloudinary(audioBuffer);
+      
+      const query = `
+        INSERT INTO messages (chat_room_id, sender_id, message_type, audio_url, cloudinary_audio_id)
+        VALUES ($1, $2, 'audio', $3, $4)
+        RETURNING *
+      `;
+      
+      const result = await pool.query(query, [
+        chatRoomId,
+        senderId,
+        uploadResult.secure_url,
+        uploadResult.public_id
+      ]);
+      
+      return result.rows[0];
+    } catch (error) {
+      console.error('CREATE AUDIO MESSAGE ERROR:', error);
+      throw error;
+    }
+  },
+
   async getMessagesByChatRoom(chatRoomId, limit = 50, offset = 0) {
     try {
       const result = await pool.query(
@@ -83,6 +145,7 @@ const Message = {
       throw error;
     }
   },
+
   async getUnreadCount(chatRoomId, userId) {
     try {
       const result = await pool.query(
@@ -99,7 +162,30 @@ const Message = {
       console.error("GET UNREAD COUNT ERROR:", error);
       throw error;
     }
-  }
+  },
+
+  async deleteAudioMessage(messageId) {
+    try {
+      const messageResult = await pool.query(
+        "SELECT cloudinary_audio_id FROM messages WHERE id = $1",
+        [messageId]
+      );
+
+      if (messageResult.rows[0]?.cloudinary_audio_id) {
+        await cloudinary.uploader.destroy(
+          messageResult.rows[0].cloudinary_audio_id,
+          { resource_type: "video" }
+        );
+      }
+
+      await pool.query("DELETE FROM messages WHERE id = $1", [messageId]);
+
+      return { success: true };
+    } catch (error) {
+      console.error("DELETE AUDIO MESSAGE ERROR:", error);
+      throw error;
+    }
+  },
 };
 
 Message.initTable();

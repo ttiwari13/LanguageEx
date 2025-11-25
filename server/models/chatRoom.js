@@ -3,6 +3,7 @@ const pool = require("../configs/db");
 const ChatRoom = {
   async initTable() {
     try {
+      // Create chat_rooms table
       await pool.query(`
         CREATE TABLE IF NOT EXISTS chat_rooms (
           id SERIAL PRIMARY KEY,
@@ -23,9 +24,25 @@ const ChatRoom = {
         CREATE INDEX IF NOT EXISTS idx_chat_rooms_user2 ON chat_rooms(user2_id);
       `);
 
-      console.log("chat_rooms table initialized");
+      // Create deleted_messages table for "Delete for Me" functionality
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS deleted_messages (
+          id SERIAL PRIMARY KEY,
+          message_id INTEGER NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          deleted_at TIMESTAMP DEFAULT NOW(),
+          UNIQUE(message_id, user_id)
+        );
+      `);
+
+      await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_deleted_messages_user ON deleted_messages(user_id);
+        CREATE INDEX IF NOT EXISTS idx_deleted_messages_message ON deleted_messages(message_id);
+      `);
+
+      console.log("chat_rooms and deleted_messages tables initialized");
     } catch (error) {
-      console.error(" chat_rooms table initialization error:", error);
+      console.error("chat_rooms table initialization error:", error);
     }
   },
 
@@ -96,6 +113,7 @@ const ChatRoom = {
       throw error;
     }
   },
+
   async getChatRoomById(chatRoomId) {
     try {
       const result = await pool.query(
@@ -109,6 +127,7 @@ const ChatRoom = {
       throw error;
     }
   },
+
   async isUserInChatRoom(chatRoomId, userId) {
     try {
       const result = await pool.query(
