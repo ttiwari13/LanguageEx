@@ -5,6 +5,7 @@ const { generateCloudinaryUrl } = require("../utils/cloudinaryUrl");
 const pool = require("../configs/db");
 
 const chatController = {
+
   async getChatRooms(req, res) {
     try {
       if (!req.user || !req.user.id) {
@@ -24,7 +25,6 @@ const chatController = {
         chatRooms: formattedChatRooms,
       });
     } catch (error) {
-      console.error("GET CHAT ROOMS ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -35,7 +35,6 @@ const chatController = {
       const userId = req.user.id;
 
       const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
-      
       if (!isAllowed) {
         return res.status(403).json({ error: "Access denied to this chat room" });
       }
@@ -51,7 +50,6 @@ const chatController = {
         chatRoom,
       });
     } catch (error) {
-      console.error("GET CHAT ROOM ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -63,20 +61,19 @@ const chatController = {
       const senderId = req.user.id;
 
       const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, senderId);
-      
       if (!isAllowed) {
-        return res.status(403).json({ error: "Access denied to this chat room" });
+        return res.status(403).json({ error: "Access denied" });
       }
 
       if (!content && !audio_url) {
-        return res.status(400).json({ error: "Message content or audio_url is required" });
+        return res.status(400).json({ error: "Content or audio_url is required" });
       }
 
       const message = await Message.createMessage(
         chatRoomId,
         senderId,
-        message_type || 'text',
-        content || '',
+        message_type || "text",
+        content || "",
         audio_url
       );
 
@@ -85,30 +82,52 @@ const chatController = {
         message,
       });
     } catch (error) {
-      console.error("SEND MESSAGE ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
 
-  // Send audio message
+  async deleteChatRoom(req, res) {
+    try {
+      const { chatRoomId } = req.params;
+      const userId = req.user.id;
+
+      const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
+      if (!isAllowed) {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      await pool.query(
+        `INSERT INTO deleted_messages (message_id, user_id, deleted_at)
+         SELECT id, $1, NOW()
+         FROM messages
+         WHERE chat_room_id = $2
+         ON CONFLICT (message_id, user_id) DO NOTHING`,
+        [userId, chatRoomId]
+      );
+
+      return res.json({
+        success: true,
+        message: "Chat deleted successfully",
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   async sendAudioMessage(req, res) {
     try {
       const { chatRoomId } = req.params;
       const senderId = req.user.id;
 
-      // Check if user has access to chat room
       const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, senderId);
-      
       if (!isAllowed) {
-        return res.status(403).json({ error: "Access denied to this chat room" });
+        return res.status(403).json({ error: "Access denied" });
       }
 
-      // Check if audio file is present
       if (!req.file || !req.file.buffer) {
-        return res.status(400).json({ error: "Audio file is required" });
+        return res.status(400).json({ error: "Audio file missing" });
       }
 
-      // Create audio message with file buffer
       const message = await Message.createAudioMessage(
         chatRoomId,
         senderId,
@@ -122,22 +141,20 @@ const chatController = {
           sender_profile_image: generateCloudinaryUrl(req.user.profile_image_public_id),
         },
       });
+
     } catch (error) {
-      console.error("SEND AUDIO MESSAGE ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
 
-  // Delete text message (supports both "me" and "everyone")
   async deleteMessage(req, res) {
     try {
       const { chatRoomId, messageId } = req.params;
       const userId = req.user.id;
-      const { deleteType } = req.query; // Get deleteType from query params
+      const { deleteType } = req.query;
 
-      // Verify the message exists
       const messageCheck = await pool.query(
-        "SELECT sender_id, message_type FROM messages WHERE id = $1 AND chat_room_id = $2",
+        "SELECT sender_id FROM messages WHERE id = $1 AND chat_room_id = $2",
         [messageId, chatRoomId]
       );
 
@@ -147,75 +164,59 @@ const chatController = {
 
       const message = messageCheck.rows[0];
 
-      // Handle "Delete for Everyone" - only sender can do this
       if (deleteType === "everyone") {
         if (message.sender_id !== userId) {
-          return res.status(403).json({ error: "You can only delete your own messages for everyone" });
+          return res.status(403).json({ error: "Only sender can delete for everyone" });
         }
 
-        // Permanently delete the message from database
         await pool.query("DELETE FROM messages WHERE id = $1", [messageId]);
 
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           message: "Message deleted for everyone",
-          deleteType: "everyone"
+          deleteType: "everyone",
         });
-      } 
-      
-      // Handle "Delete for Me" - any participant can do this
-      else if (deleteType === "me") {
-        // Check if user is part of the chat room
-        const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
-        
-        if (!isAllowed) {
-          return res.status(403).json({ error: "Access denied to this chat room" });
-        }
+      }
 
-        // Add to deleted_messages table (soft delete for specific user)
+      if (deleteType === "me") {
         await pool.query(
-          `INSERT INTO deleted_messages (message_id, user_id, deleted_at) 
+          `INSERT INTO deleted_messages (message_id, user_id, deleted_at)
            VALUES ($1, $2, NOW())
            ON CONFLICT (message_id, user_id) DO NOTHING`,
           [messageId, userId]
         );
 
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           message: "Message deleted for you",
-          deleteType: "me"
+          deleteType: "me",
         });
       }
 
-      // If no deleteType specified, default to old behavior (delete for everyone, sender only)
-      else {
-        if (message.sender_id !== userId) {
-          return res.status(403).json({ error: "You can only delete your own messages" });
-        }
-
-        await pool.query("DELETE FROM messages WHERE id = $1", [messageId]);
-
-        return res.json({ 
-          success: true, 
-          message: "Message deleted successfully" 
-        });
+      if (message.sender_id !== userId) {
+        return res.status(403).json({ error: "Not allowed" });
       }
+
+      await pool.query("DELETE FROM messages WHERE id = $1", [messageId]);
+
+      res.json({
+        success: true,
+        message: "Message deleted",
+      });
+
     } catch (error) {
-      console.error("DELETE MESSAGE ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
 
-  // Delete audio message (with Cloudinary cleanup, supports both "me" and "everyone")
   async deleteAudioMessage(req, res) {
     try {
       const { chatRoomId, messageId } = req.params;
       const userId = req.user.id;
-      const { deleteType } = req.query; // Get deleteType from query params
+      const { deleteType } = req.query;
 
-      // Verify the audio message exists
       const messageCheck = await pool.query(
-        "SELECT sender_id, cloudinary_audio_id FROM messages WHERE id = $1 AND chat_room_id = $2 AND message_type = 'audio'",
+        "SELECT sender_id FROM messages WHERE id = $1 AND chat_room_id = $2 AND message_type = 'audio'",
         [messageId, chatRoomId]
       );
 
@@ -225,34 +226,23 @@ const chatController = {
 
       const message = messageCheck.rows[0];
 
-      // Handle "Delete for Everyone" - only sender can do this
       if (deleteType === "everyone") {
         if (message.sender_id !== userId) {
-          return res.status(403).json({ error: "You can only delete your own messages for everyone" });
+          return res.status(403).json({ error: "Only sender can delete for everyone" });
         }
 
-        // Delete using the Message model (handles Cloudinary cleanup)
         await Message.deleteAudioMessage(messageId);
 
         return res.json({
           success: true,
-          message: "Audio message deleted for everyone",
-          deleteType: "everyone"
+          message: "Audio deleted for everyone",
+          deleteType: "everyone",
         });
       }
-      
-      // Handle "Delete for Me" - any participant can do this
-      else if (deleteType === "me") {
-        // Check if user is part of the chat room
-        const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
-        
-        if (!isAllowed) {
-          return res.status(403).json({ error: "Access denied to this chat room" });
-        }
 
-        // Add to deleted_messages table (soft delete for specific user)
+      if (deleteType === "me") {
         await pool.query(
-          `INSERT INTO deleted_messages (message_id, user_id, deleted_at) 
+          `INSERT INTO deleted_messages (message_id, user_id, deleted_at)
            VALUES ($1, $2, NOW())
            ON CONFLICT (message_id, user_id) DO NOTHING`,
           [messageId, userId]
@@ -260,26 +250,20 @@ const chatController = {
 
         return res.json({
           success: true,
-          message: "Audio message deleted for you",
-          deleteType: "me"
+          message: "Audio deleted for you",
+          deleteType: "me",
         });
       }
 
-      // If no deleteType specified, default to old behavior (delete for everyone, sender only)
-      else {
-        if (message.sender_id !== userId) {
-          return res.status(403).json({ error: "You can only delete your own messages" });
-        }
-
-        await Message.deleteAudioMessage(messageId);
-
-        return res.json({
-          success: true,
-          message: "Audio message deleted successfully",
-        });
+      if (message.sender_id !== userId) {
+        return res.status(403).json({ error: "Not allowed" });
       }
+
+      await Message.deleteAudioMessage(messageId);
+
+      res.json({ success: true, message: "Audio deleted" });
+
     } catch (error) {
-      console.error("DELETE AUDIO MESSAGE ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -288,31 +272,29 @@ const chatController = {
     try {
       const { chatRoomId } = req.params;
       const userId = req.user.id;
+
       const limit = parseInt(req.query.limit) || 50;
       const offset = parseInt(req.query.offset) || 0;
 
       const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
-      
       if (!isAllowed) {
-        return res.status(403).json({ error: "Access denied to this chat room" });
+        return res.status(403).json({ error: "Access denied" });
       }
 
-      // Get messages excluding ones deleted by this user
       const messages = await pool.query(
-        `SELECT m.*, u.name as sender_name, u.profile_image_public_id
+        `SELECT m.*, u.name AS sender_name, u.profile_image_public_id
          FROM messages m
          JOIN users u ON m.sender_id = u.id
          WHERE m.chat_room_id = $1
          AND m.id NOT IN (
-           SELECT message_id FROM deleted_messages 
-           WHERE user_id = $2
+           SELECT message_id FROM deleted_messages WHERE user_id = $2
          )
          ORDER BY m.created_at DESC
          LIMIT $3 OFFSET $4`,
         [chatRoomId, userId, limit, offset]
       );
 
-      const formattedMessages = messages.rows.map((msg) => ({
+      const formatted = messages.rows.map((msg) => ({
         ...msg,
         sender_profile_image: generateCloudinaryUrl(msg.profile_image_public_id),
       }));
@@ -321,10 +303,10 @@ const chatController = {
 
       res.json({
         success: true,
-        messages: formattedMessages.reverse(), // Reverse to show oldest first
+        messages: formatted.reverse(),
       });
+
     } catch (error) {
-      console.error("GET MESSAGES ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -335,9 +317,8 @@ const chatController = {
       const userId = req.user.id;
 
       const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
-      
       if (!isAllowed) {
-        return res.status(403).json({ error: "Access denied to this chat room" });
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const count = await Message.getUnreadCount(chatRoomId, userId);
@@ -346,8 +327,8 @@ const chatController = {
         success: true,
         unreadCount: count,
       });
+
     } catch (error) {
-      console.error("GET UNREAD COUNT ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -358,15 +339,15 @@ const chatController = {
       const callerId = req.user.id;
 
       const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, callerId);
-      
       if (!isAllowed) {
-        return res.status(403).json({ error: "Access denied to this chat room" });
+        return res.status(403).json({ error: "Access denied" });
       }
 
       const chatRoom = await ChatRoom.getChatRoomById(chatRoomId);
-      const receiverId = chatRoom.user1_id === callerId 
-        ? chatRoom.user2_id 
-        : chatRoom.user1_id;
+      const receiverId =
+        chatRoom.user1_id === callerId
+          ? chatRoom.user2_id
+          : chatRoom.user1_id;
 
       const videoCall = await VideoCall.createVideoCall(
         chatRoomId,
@@ -379,8 +360,8 @@ const chatController = {
         message: "Video call initiated",
         videoCall,
       });
+
     } catch (error) {
-      console.error("INITIATE VIDEO CALL ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -397,11 +378,10 @@ const chatController = {
 
       res.json({
         success: true,
-        message: "Video call ended",
         videoCall: updatedCall,
       });
+
     } catch (error) {
-      console.error("END VIDEO CALL ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -412,81 +392,77 @@ const chatController = {
       const userId = req.user.id;
 
       const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
-      
       if (!isAllowed) {
-        return res.status(403).json({ error: "Access denied to this chat room" });
+        return res.status(403).json({ error: "Access denied" });
       }
 
-      const callHistory = await VideoCall.getCallHistory(chatRoomId);
+      const history = await VideoCall.getCallHistory(chatRoomId);
 
       res.json({
         success: true,
-        callHistory,
+        callHistory: history,
       });
+
     } catch (error) {
-      console.error("GET CALL HISTORY ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
+
   async clearAllMessages(req, res) {
-        let client;
-        try {
-            const { chatRoomId } = req.params;
-            const userId = req.user.id;
+    let client;
+    try {
+      const { chatRoomId } = req.params;
+      const userId = req.user.id;
 
-            // 1. Authorization check
-            const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
-            if (!isAllowed) {
-                return res.status(403).json({ error: "Access denied to this chat room" });
-            }
+      const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, userId);
+      if (!isAllowed) {
+        return res.status(403).json({ error: "Access denied" });
+      }
 
-            client = await pool.connect();
-            await client.query('BEGIN'); // Start transaction
+      client = await pool.connect();
+      await client.query("BEGIN");
 
-            // 2. Get IDs of all messages in the chat room that are NOT already soft-deleted by this user
-            const messagesToClear = await client.query(
-                `SELECT m.id FROM messages m
-                WHERE m.chat_room_id = $1
-                AND m.id NOT IN (
-                    SELECT message_id FROM deleted_messages 
-                    WHERE user_id = $2
-                )`,
-                [chatRoomId, userId]
-            );
+      const messagesToClear = await client.query(
+        `SELECT id FROM messages 
+         WHERE chat_room_id = $1
+         AND id NOT IN (
+           SELECT message_id FROM deleted_messages WHERE user_id = $2
+         )`,
+        [chatRoomId, userId]
+      );
 
-            if (messagesToClear.rows.length === 0) {
-                 await client.query('COMMIT');
-                return res.json({
-                    success: true,
-                    message: "Chat history already cleared for this user, or no messages found."
-                });
-            }
+      if (messagesToClear.rows.length === 0) {
+        await client.query("COMMIT");
+        return res.json({
+          success: true,
+          message: "Already cleared or no messages.",
+        });
+      }
 
-            // 3. Insert all these message IDs into the deleted_messages table for the current user.
-            // This is the "soft delete" operation.
-            const values = messagesToClear.rows.map(row => `(${row.id}, ${userId}, NOW())`).join(',');
-            
-            await client.query(
-                `INSERT INTO deleted_messages (message_id, user_id, deleted_at) 
-                 VALUES ${values} 
-                 ON CONFLICT (message_id, user_id) DO NOTHING`
-            );
+      const values = messagesToClear.rows
+        .map((row) => `(${row.id}, ${userId}, NOW())`)
+        .join(",");
 
-            await client.query('COMMIT'); // End transaction successfully
+      await client.query(
+        `INSERT INTO deleted_messages (message_id, user_id, deleted_at)
+         VALUES ${values}
+         ON CONFLICT (message_id, user_id) DO NOTHING`
+      );
 
-            return res.json({
-                success: true,
-                message: `Cleared ${messagesToClear.rows.length} messages for user ${userId} in chat room ${chatRoomId}`
-            });
+      await client.query("COMMIT");
 
-        } catch (error) {
-            if (client) await client.query('ROLLBACK'); // Rollback on error
-            console.error("CLEAR ALL MESSAGES ERROR:", error);
-            res.status(500).json({ error: "Failed to clear chat history: " + error.message });
-        } finally {
-           if (client) client.release();
-        }
+      return res.json({
+        success: true,
+        message: `Cleared ${messagesToClear.rows.length} messages`,
+      });
+
+    } catch (error) {
+      if (client) await client.query("ROLLBACK");
+      res.status(500).json({ error: error.message });
+    } finally {
+      if (client) client.release();
     }
+  },
 };
 
 module.exports = chatController;

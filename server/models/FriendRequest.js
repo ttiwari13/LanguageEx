@@ -165,7 +165,16 @@ async cleanupDuplicates(userId1, userId2) {
     )
   `, [userId1, userId2]);
 },
-  
+  async checkIfFriends(userId, friendId) {
+  const result = await pool.query(
+    `SELECT * FROM friend_requests 
+     WHERE status = 'accepted' 
+     AND ((sender_id = $1 AND receiver_id = $2) 
+          OR (sender_id = $2 AND receiver_id = $1))`,
+    [userId, friendId]
+  );
+  return result.rows.length > 0;
+}
 };
 
 module.exports = FriendRequest;

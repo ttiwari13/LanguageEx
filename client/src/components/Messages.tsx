@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Video, Edit, Search } from "lucide-react";
+import { Video, Edit, Search, Trash2 } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 
 interface ChatRoom {
@@ -31,6 +31,7 @@ const MessagesPage = () => {
   const [chatRooms, setChatRooms] = useState<ChatRoom[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [deleting, setDeleting] = useState<number | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -39,6 +40,20 @@ const MessagesPage = () => {
 
     return () => {
       if (socket) socket.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchChatRooms();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
@@ -65,7 +80,7 @@ const MessagesPage = () => {
           const confirmCall = window.confirm(
             `Incoming video call from ${room.friend_name}. Accept?`
           );
-          
+
           if (confirmCall) {
             navigate(`/video-call/${chatRoomId}`, {
               state: {
@@ -92,8 +107,11 @@ const MessagesPage = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setChatRooms(res.data.chatRooms);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem("token");
+        navigate("/login");
+      }
     } finally {
       setLoading(false);
     }
@@ -101,6 +119,44 @@ const MessagesPage = () => {
 
   const openChat = (room: ChatRoom) => {
     navigate(`/chat/${room.chat_room_id}`);
+  };
+
+  const deleteChat = async (chatRoomId: number) => {
+    const confirmDelete = window.confirm(
+      "Permanently delete this chat?\n\n" +
+      "This will remove the entire conversation for both you and your friend.\n" +
+      "This action cannot be undone."
+    );
+    
+    if (!confirmDelete) return;
+
+    setDeleting(chatRoomId);
+
+    try {
+      const token = localStorage.getItem("token");
+
+      const response = await axios.delete(
+        `http://localhost:4000/api/chats/${chatRoomId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (response.data.success) {
+        setChatRooms((prev) =>
+          prev.filter((room) => room.chat_room_id !== chatRoomId)
+        );
+      }
+    } catch (err: any) {
+      const errorMessage = err.response?.data?.error || "Failed to delete chat. Please try again.";
+      alert(errorMessage);
+      if (err.response?.status === 401) {
+        localStorage.removeItem("token");
+        navigate("/login");
+      }
+    } finally {
+      setDeleting(null);
+    }
   };
 
   const filteredChats = chatRooms.filter((room) =>
@@ -121,16 +177,18 @@ const MessagesPage = () => {
 
   return (
     <div className="h-full bg-gray-900 text-white flex flex-col">
-      {/* Header */}
       <div className="p-4 border-b border-gray-800">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Messages</h1>
-          <button className="p-2 hover:bg-gray-800 rounded-full transition">
+          <button 
+            onClick={() => navigate("/search-users")}
+            className="p-2 hover:bg-gray-800 rounded-full transition"
+            title="New message"
+          >
             <Edit size={20} />
           </button>
         </div>
 
-        {/* Search Bar */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
           <input
@@ -143,16 +201,20 @@ const MessagesPage = () => {
         </div>
       </div>
 
-      {/* Chat List */}
       <div className="flex-1 overflow-y-auto">
         {filteredChats.length === 0 ? (
           <div className="text-center text-gray-400 mt-20 px-4">
             <div className="w-20 h-20 mx-auto mb-4 rounded-full border-2 border-gray-700 flex items-center justify-center">
               <Edit size={32} className="text-gray-600" />
             </div>
-            <p className="text-xl font-semibold mb-2">Your messages</p>
+            <p className="text-xl font-semibold mb-2">
+              {searchQuery ? "No chats found" : "Your messages"}
+            </p>
             <p className="text-sm text-gray-500">
-              Send private messages to a friend
+              {searchQuery 
+                ? `No results for "${searchQuery}"`
+                : "Send private messages to a friend"
+              }
             </p>
           </div>
         ) : (
@@ -161,21 +223,23 @@ const MessagesPage = () => {
               <div
                 key={room.chat_room_id}
                 onClick={() => openChat(room)}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 cursor-pointer transition"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-800 cursor-pointer transition relative"
               >
-                {/* Profile Picture */}
                 <div className="relative flex-shrink-0">
                   <img
                     src={room.friend_profile_image || "/default_profile.png"}
                     alt={room.friend_name}
                     className="w-14 h-14 rounded-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = "/default_profile.png";
+                    }}
                   />
                   {room.is_online && (
                     <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 rounded-full border-2 border-gray-900"></div>
                   )}
                 </div>
 
-                {/* Chat Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-sm truncate">
@@ -192,25 +256,42 @@ const MessagesPage = () => {
                   </p>
                 </div>
 
-                {/* Video Call Icon (only if online) */}
-                {room.is_online && (
+                <div className="flex items-center gap-1">
+                  {room.is_online && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/video-call/${room.chat_room_id}`, {
+                          state: {
+                            friendId: room.friend_id,
+                            friendName: room.friend_name,
+                            isReceiver: false,
+                          },
+                        });
+                      }}
+                      className="p-2 hover:bg-gray-700 rounded-full transition"
+                      title="Start video call"
+                    >
+                      <Video size={18} className="text-blue-500" />
+                    </button>
+                  )}
+
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/video-call/${room.chat_room_id}`, {
-                        state: {
-                          friendId: room.friend_id,
-                          friendName: room.friend_name,
-                          isReceiver: false,
-                        },
-                      });
+                      deleteChat(room.chat_room_id);
                     }}
-                    className="p-2 hover:bg-gray-700 rounded-full transition"
-                    title="Start video call"
+                    disabled={deleting === room.chat_room_id}
+                    className="p-2 hover:bg-red-700/30 rounded-full transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Delete Chat"
                   >
-                    <Video size={18} className="text-blue-500" />
+                    {deleting === room.chat_room_id ? (
+                      <div className="animate-spin rounded-full h-[18px] w-[18px] border-2 border-red-400 border-t-transparent"></div>
+                    ) : (
+                      <Trash2 size={18} className="text-red-400" />
+                    )}
                   </button>
-                )}
+                </div>
               </div>
             ))}
           </div>

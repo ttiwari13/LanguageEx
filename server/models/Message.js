@@ -15,39 +15,44 @@ const Message = {
           id SERIAL PRIMARY KEY,
           chat_room_id INT NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
           sender_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-          message_type VARCHAR(20) DEFAULT 'text', -- 'text', 'audio', 'image'
+
+          -- Message Types
+          message_type VARCHAR(20) DEFAULT 'text',  -- text, audio, image, etc.
+
+          -- Text Content
           content TEXT,
+
+          -- Audio Fields
           audio_url TEXT,
+          cloudinary_audio_id TEXT,
+          audio_duration INT,
+
+          -- General Fields
           created_at TIMESTAMP DEFAULT NOW(),
-          is_read BOOLEAN DEFAULT FALSE
+          is_read BOOLEAN DEFAULT FALSE,
+          is_deleted_for_everyone BOOLEAN DEFAULT FALSE
         );
       `);
-      
-      await pool.query(`
-        ALTER TABLE messages 
-        ADD COLUMN IF NOT EXISTS audio_duration INT,
-        ADD COLUMN IF NOT EXISTS cloudinary_audio_id TEXT;
-      `);
-      
+
       await pool.query(`
         CREATE INDEX IF NOT EXISTS idx_messages_chat_room ON messages(chat_room_id);
         CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC);
         CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
       `);
+
+      console.log("messages table initialized");
     } catch (error) {
       console.error("messages table initialization error:", error.message);
     }
   },
-
-  // Create a new text message
-  async createMessage(chatRoomId, senderId, messageType, content, audioUrl = null) {
+  async createMessage(chatRoomId, senderId, messageType, content) {
     try {
       const result = await pool.query(
         `INSERT INTO messages 
-         (chat_room_id, sender_id, message_type, content, audio_url, created_at)
-         VALUES ($1, $2, $3, $4, $5, NOW())
-         RETURNING *`,
-        [chatRoomId, senderId, messageType, content, audioUrl]
+        (chat_room_id, sender_id, message_type, content, created_at)
+        VALUES ($1, $2, $3, $4, NOW())
+        RETURNING *`,
+        [chatRoomId, senderId, messageType, content]
       );
 
       return result.rows[0];
@@ -56,8 +61,6 @@ const Message = {
       throw error;
     }
   },
-
-  // Upload audio to Cloudinary
   uploadAudioToCloudinary(buffer) {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
@@ -79,45 +82,42 @@ const Message = {
     });
   },
 
-  // Create audio message
-  async createAudioMessage(chatRoomId, senderId, audioBuffer) {
+  async createAudioMessage(chatRoomId, senderId, audioBuffer, duration = null) {
     try {
-      // Upload audio to Cloudinary
-      const uploadResult = await this.uploadAudioToCloudinary(audioBuffer);
-      
-      const query = `
-        INSERT INTO messages (chat_room_id, sender_id, message_type, audio_url, cloudinary_audio_id)
-        VALUES ($1, $2, 'audio', $3, $4)
-        RETURNING *
-      `;
-      
-      const result = await pool.query(query, [
-        chatRoomId,
-        senderId,
-        uploadResult.secure_url,
-        uploadResult.public_id
-      ]);
-      
+      const upload = await this.uploadAudioToCloudinary(audioBuffer);
+
+      const result = await pool.query(
+        `INSERT INTO messages 
+        (chat_room_id, sender_id, message_type, audio_url, cloudinary_audio_id, audio_duration)
+        VALUES ($1, $2, 'audio', $3, $4, $5)
+        RETURNING *`,
+        [chatRoomId, senderId, upload.secure_url, upload.public_id, duration]
+      );
+
       return result.rows[0];
     } catch (error) {
-      console.error('CREATE AUDIO MESSAGE ERROR:', error);
+      console.error("CREATE AUDIO MESSAGE ERROR:", error);
       throw error;
     }
   },
-
-  async getMessagesByChatRoom(chatRoomId, limit = 50, offset = 0) {
+  async getMessagesByChatRoom(chatRoomId, userId, limit = 50, offset = 0) {
     try {
       const result = await pool.query(
         `SELECT 
           m.*,
-          u.name as sender_name,
-          u.profile_image_public_id
+          u.name AS sender_name,
+          u.profile_image_public_id,
+          dm.id AS deleted_for_me
         FROM messages m
         JOIN users u ON m.sender_id = u.id
+        LEFT JOIN deleted_messages dm 
+          ON dm.message_id = m.id AND dm.user_id = $2
         WHERE m.chat_room_id = $1
+          AND m.is_deleted_for_everyone = FALSE
+          AND dm.id IS NULL
         ORDER BY m.created_at DESC
-        LIMIT $2 OFFSET $3`,
-        [chatRoomId, limit, offset]
+        LIMIT $3 OFFSET $4`,
+        [chatRoomId, userId, limit, offset]
       );
 
       return result.rows.reverse(); 
@@ -126,14 +126,13 @@ const Message = {
       throw error;
     }
   },
-
   async markAsRead(chatRoomId, userId) {
     try {
       const result = await pool.query(
-        `UPDATE messages 
-         SET is_read = TRUE 
-         WHERE chat_room_id = $1 
-         AND sender_id != $2 
+        `UPDATE messages
+         SET is_read = TRUE
+         WHERE chat_room_id = $1
+         AND sender_id != $2
          AND is_read = FALSE
          RETURNING *`,
         [chatRoomId, userId]
@@ -145,11 +144,10 @@ const Message = {
       throw error;
     }
   },
-
   async getUnreadCount(chatRoomId, userId) {
     try {
       const result = await pool.query(
-        `SELECT COUNT(*) as count
+        `SELECT COUNT(*) AS count
          FROM messages
          WHERE chat_room_id = $1
          AND sender_id != $2
@@ -163,22 +161,20 @@ const Message = {
       throw error;
     }
   },
-
   async deleteAudioMessage(messageId) {
     try {
-      const messageResult = await pool.query(
-        "SELECT cloudinary_audio_id FROM messages WHERE id = $1",
+      const msg = await pool.query(
+        `SELECT cloudinary_audio_id FROM messages WHERE id = $1`,
         [messageId]
       );
 
-      if (messageResult.rows[0]?.cloudinary_audio_id) {
-        await cloudinary.uploader.destroy(
-          messageResult.rows[0].cloudinary_audio_id,
-          { resource_type: "video" }
-        );
+      if (msg.rows[0]?.cloudinary_audio_id) {
+        await cloudinary.uploader.destroy(msg.rows[0].cloudinary_audio_id, {
+          resource_type: "video"
+        });
       }
 
-      await pool.query("DELETE FROM messages WHERE id = $1", [messageId]);
+      await pool.query(`DELETE FROM messages WHERE id = $1`, [messageId]);
 
       return { success: true };
     } catch (error) {
@@ -186,6 +182,38 @@ const Message = {
       throw error;
     }
   },
+
+  async deleteForMe(messageId, userId) {
+    try {
+      await pool.query(
+        `INSERT INTO deleted_messages (message_id, user_id)
+         VALUES ($1, $2)
+         ON CONFLICT DO NOTHING`,
+        [messageId, userId]
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error("DELETE FOR ME ERROR:", error);
+      throw error;
+    }
+  },
+
+  async deleteForEveryone(messageId) {
+    try {
+      await pool.query(
+        `UPDATE messages
+         SET is_deleted_for_everyone = TRUE
+         WHERE id = $1`,
+        [messageId]
+      );
+
+      return { success: true };
+    } catch (error) {
+      console.error("DELETE FOR EVERYONE ERROR:", error);
+      throw error;
+    }
+  }
 };
 
 Message.initTable();

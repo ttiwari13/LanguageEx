@@ -10,5 +10,5 @@ router.get('/friends/pending', authMiddleware, friendController.pending);
 router.get('/friends/list', authMiddleware, friendController.friends);
 router.delete('/friends/cancel/:receiverId', authMiddleware, friendController.cancel);
 router.delete('/friends/unfriend/:friendId', authMiddleware, friendController.unfriend);
-
+router.post('/friends/create-chat', authMiddleware, friendController.createChat);
 module.exports = router;

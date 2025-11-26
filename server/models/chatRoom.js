@@ -14,8 +14,9 @@ const ChatRoom = {
         );
       `);
 
+      // Unique pair index to avoid duplicate chat rooms
       await pool.query(`
-        CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_chat_room 
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_chat_room
         ON chat_rooms (LEAST(user1_id, user2_id), GREATEST(user1_id, user2_id));
       `);
 
@@ -24,7 +25,7 @@ const ChatRoom = {
         CREATE INDEX IF NOT EXISTS idx_chat_rooms_user2 ON chat_rooms(user2_id);
       `);
 
-      // Create deleted_messages table for "Delete for Me" functionality
+      // deleted_messages table
       await pool.query(`
         CREATE TABLE IF NOT EXISTS deleted_messages (
           id SERIAL PRIMARY KEY,
@@ -50,7 +51,7 @@ const ChatRoom = {
     try {
       const existingRoom = await pool.query(
         `SELECT id FROM chat_rooms 
-         WHERE (user1_id = $1 AND user2_id = $2) 
+         WHERE (user1_id = $1 AND user2_id = $2)
             OR (user1_id = $2 AND user2_id = $1)`,
         [user1_id, user2_id]
       );
@@ -58,6 +59,7 @@ const ChatRoom = {
       if (existingRoom.rows.length > 0) {
         return existingRoom.rows[0];
       }
+
       const result = await pool.query(
         `INSERT INTO chat_rooms (user1_id, user2_id, created_at)
          VALUES ($1, $2, NOW())
@@ -155,7 +157,16 @@ const ChatRoom = {
       console.error("DELETE CHAT ROOM ERROR:", error);
       throw error;
     }
-  }
+  },
+async getChatRoomByUsers(user1Id, user2Id) {
+  const result = await pool.query(
+    `SELECT * FROM chat_rooms 
+     WHERE (user1_id = $1 AND user2_id = $2)
+        OR (user1_id = $2 AND user2_id = $1)`,
+    [user1Id, user2Id]
+  );
+  return result.rows[0] || null;
+}
 };
 
 ChatRoom.initTable();

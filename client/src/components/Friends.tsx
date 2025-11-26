@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { MessageCircle, UserMinus } from "lucide-react";
 
 interface FriendRequest {
   id: number;
@@ -22,13 +24,17 @@ export default function FriendsDashboard() {
   const [outgoingRequests, setOutgoingRequests] = useState<FriendRequest[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [loading, setLoading] = useState(true);
+  const [messagingFriend, setMessagingFriend] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"friends" | "incoming" | "outgoing">("incoming");
+  
+  const navigate = useNavigate();
 
   const fetchAllData = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
       if (!token) return;
+      
       const incomingRes = await axios.get(
         "http://localhost:4000/api/friends/incoming",
         {
@@ -36,6 +42,7 @@ export default function FriendsDashboard() {
         }
       );
       setIncomingRequests(incomingRes.data || []);
+      
       const outgoingRes = await axios.get(
         "http://localhost:4000/api/friends/pending",
         {
@@ -43,6 +50,7 @@ export default function FriendsDashboard() {
         }
       );
       setOutgoingRequests(outgoingRes.data || []);
+      
       const friendsRes = await axios.get(
         "http://localhost:4000/api/friends/list",
         {
@@ -72,7 +80,7 @@ export default function FriendsDashboard() {
         }
       );
       alert("Friend request accepted!");
-      fetchAllData(); // Refresh data
+      fetchAllData();
     } catch (err) {
       console.error("Accept error:", err);
       alert("Failed to accept request");
@@ -115,6 +123,12 @@ export default function FriendsDashboard() {
   };
 
   const handleUnfriend = async (friendId: number) => {
+    const confirmUnfriend = window.confirm(
+      "Are you sure you want to unfriend this person? You can still message them from your chat list."
+    );
+    
+    if (!confirmUnfriend) return;
+
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
@@ -131,10 +145,59 @@ export default function FriendsDashboard() {
     }
   };
 
+  const handleMessage = async (friendId: number) => {
+  setMessagingFriend(friendId);
+  
+  try {
+    const token = localStorage.getItem("token");
+    
+    if (!token) {
+      alert("Please login first");
+      navigate("/");
+      return;
+    }
+    
+    // Create or get existing chat room
+    const response = await axios.post(
+      "http://localhost:4000/api/friends/create-chat",
+      { friend_id: friendId },
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    const chatRoomId = response.data.chatRoomId || response.data.chat_room_id;
+    
+    if (!chatRoomId) {
+      throw new Error("No chat room ID received");
+    }
+    
+    // Navigate directly to the chat page (like Instagram)
+    navigate(`/chat/${chatRoomId}`);
+    
+  } catch (err: any) {
+    console.error("Message error:", err);
+    
+    // Better error messages
+    if (err.response?.status === 403) {
+      alert("You are not friends with this user");
+    } else if (err.response?.status === 401) {
+      alert("Session expired. Please login again");
+      navigate("/");
+    } else {
+      alert(err.response?.data?.error || "Failed to open chat. Please try again.");
+    }
+  } finally {
+    setMessagingFriend(null);
+  }
+};
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
-        <div className="text-2xl">Loading...</div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-xl">Loading friends...</p>
+        </div>
       </div>
     );
   }
@@ -197,6 +260,10 @@ export default function FriendsDashboard() {
                     }
                     alt={req.name}
                     className="w-16 h-16 rounded-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = "/default_profile.png";
+                    }}
                   />
                   <div>
                     <h3 className="text-xl font-semibold">{req.name}</h3>
@@ -243,15 +310,42 @@ export default function FriendsDashboard() {
                     }
                     alt={friend.name}
                     className="w-24 h-24 rounded-full object-cover mb-4"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = "/default_profile.png";
+                    }}
                   />
                   <h3 className="text-xl font-semibold text-center">{friend.name}</h3>
                   <p className="text-gray-400 text-center mb-4">@{friend.username}</p>
-                  <button
-                    onClick={() => handleUnfriend(friend.id)}
-                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg transition font-medium"
-                  >
-                    Unfriend
-                  </button>
+                  
+                  {/* Action Buttons */}
+                  <div className="w-full space-y-2">
+                    <button
+                      onClick={() => handleMessage(friend.id)}
+                      disabled={messagingFriend === friend.id}
+                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {messagingFriend === friend.id ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                          <span>Opening...</span>
+                        </>
+                      ) : (
+                        <>
+                          <MessageCircle size={18} />
+                          <span>Message</span>
+                        </>
+                      )}
+                    </button>
+                    
+                    <button
+                      onClick={() => handleUnfriend(friend.id)}
+                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg transition font-medium flex items-center justify-center gap-2"
+                    >
+                      <UserMinus size={18} />
+                      <span>Unfriend</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))
@@ -279,6 +373,10 @@ export default function FriendsDashboard() {
                     }
                     alt={req.name}
                     className="w-16 h-16 rounded-full object-cover"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.src = "/default_profile.png";
+                    }}
                   />
                   <div>
                     <h3 className="text-xl font-semibold">{req.name}</h3>

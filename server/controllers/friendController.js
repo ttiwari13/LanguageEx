@@ -172,6 +172,54 @@ const friendController = {
       console.error("UNFRIEND ERROR:", error);
       res.status(500).json({ error: error.message });
     }
+  },
+  async createChat(req, res) {
+    try {
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({ error: "User not authenticated" });
+      }
+
+      const userId = req.user.id;
+      const { friend_id } = req.body;
+
+      if (!friend_id) {
+        return res.status(400).json({ error: "friend_id is required" });
+      }
+
+      // Check if they are friends
+      const friendCheck = await FriendRequest.checkIfFriends(userId, friend_id);
+      
+      if (!friendCheck) {
+        return res.status(403).json({ error: "You are not friends with this user" });
+      }
+
+      // Check if chat room already exists
+      const existingChat = await ChatRoom.getChatRoomByUsers(userId, friend_id);
+
+      if (existingChat) {
+        // Chat room exists, return it
+        return res.json({
+          success: true,
+          message: "Chat room already exists",
+          chatRoomId: existingChat.id,
+          chat_room_id: existingChat.id
+        });
+      }
+
+      // Create new chat room
+      const newChatRoom = await ChatRoom.createChatRoom(userId, friend_id);
+
+      res.json({
+        success: true,
+        message: "Chat room created",
+        chatRoomId: newChatRoom.id,
+        chat_room_id: newChatRoom.id
+      });
+
+    } catch (error) {
+      console.error("CREATE CHAT ERROR:", error);
+      res.status(500).json({ error: error.message });
+    }
   }
 };
 
