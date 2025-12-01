@@ -26,38 +26,38 @@ export default function FriendsDashboard() {
   const [loading, setLoading] = useState(true);
   const [messagingFriend, setMessagingFriend] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"friends" | "incoming" | "outgoing">("incoming");
-  
+
   const navigate = useNavigate();
+
+  // 🔴 Red dot component (like Instagram)
+  const RedDot = () => (
+    <span className="ml-2 inline-block w-3 h-3 bg-red-500 rounded-full"></span>
+  );
 
   const fetchAllData = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
       if (!token) return;
-      
+
       const incomingRes = await axios.get(
         "http://localhost:4000/api/friends/incoming",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setIncomingRequests(incomingRes.data || []);
-      
+
       const outgoingRes = await axios.get(
         "http://localhost:4000/api/friends/pending",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setOutgoingRequests(outgoingRes.data || []);
-      
+
       const friendsRes = await axios.get(
         "http://localhost:4000/api/friends/list",
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setFriends(friendsRes.data || []);
+
     } catch (err) {
       console.error("Error fetching friends data:", err);
     } finally {
@@ -75,9 +75,7 @@ export default function FriendsDashboard() {
       await axios.post(
         "http://localhost:4000/api/friends/accept",
         { request_id: requestId },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       alert("Friend request accepted!");
       fetchAllData();
@@ -93,9 +91,7 @@ export default function FriendsDashboard() {
       await axios.post(
         "http://localhost:4000/api/friends/reject",
         { request_id: requestId },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       alert("Friend request rejected!");
       fetchAllData();
@@ -110,9 +106,7 @@ export default function FriendsDashboard() {
       const token = localStorage.getItem("token");
       await axios.delete(
         `http://localhost:4000/api/friends/cancel/${receiverId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       alert("Request cancelled!");
       fetchAllData();
@@ -126,16 +120,13 @@ export default function FriendsDashboard() {
     const confirmUnfriend = window.confirm(
       "Are you sure you want to unfriend this person? You can still message them from your chat list."
     );
-    
     if (!confirmUnfriend) return;
 
     try {
       const token = localStorage.getItem("token");
       await axios.delete(
         `http://localhost:4000/api/friends/unfriend/${friendId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       alert("Unfriended successfully!");
       fetchAllData();
@@ -146,51 +137,44 @@ export default function FriendsDashboard() {
   };
 
   const handleMessage = async (friendId: number) => {
-  setMessagingFriend(friendId);
-  
-  try {
-    const token = localStorage.getItem("token");
-    
-    if (!token) {
-      alert("Please login first");
-      navigate("/");
-      return;
-    }
-    
-    // Create or get existing chat room
-    const response = await axios.post(
-      "http://localhost:4000/api/friends/create-chat",
-      { friend_id: friendId },
-      {
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    );
+    setMessagingFriend(friendId);
+    try {
+      const token = localStorage.getItem("token");
 
-    const chatRoomId = response.data.chatRoomId || response.data.chat_room_id;
-    
-    if (!chatRoomId) {
-      throw new Error("No chat room ID received");
+      if (!token) {
+        alert("Please login first");
+        navigate("/");
+        return;
+      }
+
+      const response = await axios.post(
+        "http://localhost:4000/api/friends/create-chat",
+        { friend_id: friendId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const chatRoomId = response.data.chatRoomId || response.data.chat_room_id;
+
+      if (!chatRoomId) throw new Error("No chat room ID received");
+
+      navigate(`/chat/${chatRoomId}`);
+
+    } catch (err: any) {
+      console.error("Message error:", err);
+
+      if (err.response?.status === 403) {
+        alert("You are not friends with this user");
+      } else if (err.response?.status === 401) {
+        alert("Session expired. Please login again");
+        navigate("/");
+      } else {
+        alert(err.response?.data?.error || "Failed to open chat. Please try again.");
+      }
+    } finally {
+      setMessagingFriend(null);
     }
-    
-    // Navigate directly to the chat page (like Instagram)
-    navigate(`/chat/${chatRoomId}`);
-    
-  } catch (err: any) {
-    console.error("Message error:", err);
-    
-    // Better error messages
-    if (err.response?.status === 403) {
-      alert("You are not friends with this user");
-    } else if (err.response?.status === 401) {
-      alert("Session expired. Please login again");
-      navigate("/");
-    } else {
-      alert(err.response?.data?.error || "Failed to open chat. Please try again.");
-    }
-  } finally {
-    setMessagingFriend(null);
-  }
-};
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
@@ -206,21 +190,26 @@ export default function FriendsDashboard() {
     <div className="min-h-screen bg-gray-900 text-white p-8">
       <h1 className="text-4xl font-bold mb-8">Friends</h1>
 
-      {/* Tabs */}
+      {/* Tabs with notification red dots */}
       <div className="flex gap-4 mb-8 border-b border-gray-700">
+
+        {/* Incoming Requests */}
         <button
           onClick={() => setActiveTab("incoming")}
-          className={`px-6 py-3 font-semibold transition ${
+          className={`px-6 py-3 font-semibold flex items-center transition ${
             activeTab === "incoming"
               ? "border-b-2 border-blue-500 text-blue-500"
               : "text-gray-400 hover:text-white"
           }`}
         >
           Incoming Requests ({incomingRequests.length})
+          {incomingRequests.length > 0 && <RedDot />}
         </button>
+
+        {/* Friends */}
         <button
           onClick={() => setActiveTab("friends")}
-          className={`px-6 py-3 font-semibold transition ${
+          className={`px-6 py-3 font-semibold flex items-center transition ${
             activeTab === "friends"
               ? "border-b-2 border-blue-500 text-blue-500"
               : "text-gray-400 hover:text-white"
@@ -228,19 +217,22 @@ export default function FriendsDashboard() {
         >
           Friends ({friends.length})
         </button>
+
+        {/* Outgoing Requests */}
         <button
           onClick={() => setActiveTab("outgoing")}
-          className={`px-6 py-3 font-semibold transition ${
+          className={`px-6 py-3 font-semibold flex items-center transition ${
             activeTab === "outgoing"
               ? "border-b-2 border-blue-500 text-blue-500"
               : "text-gray-400 hover:text-white"
           }`}
         >
           Sent Requests ({outgoingRequests.length})
+          {outgoingRequests.length > 0 && <RedDot />}
         </button>
       </div>
 
-      {/* Incoming Requests */}
+      {/* ---------- Incoming Requests ---------- */}
       {activeTab === "incoming" && (
         <div className="space-y-4">
           {incomingRequests.length === 0 ? (
@@ -260,26 +252,24 @@ export default function FriendsDashboard() {
                     }
                     alt={req.name}
                     className="w-16 h-16 rounded-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = "/default_profile.png";
-                    }}
                   />
                   <div>
                     <h3 className="text-xl font-semibold">{req.name}</h3>
                     <p className="text-gray-400">@{req.username}</p>
                   </div>
                 </div>
+
                 <div className="flex gap-3">
                   <button
                     onClick={() => handleAccept(req.id)}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium"
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium"
                   >
                     Accept
                   </button>
+
                   <button
                     onClick={() => handleReject(req.id)}
-                    className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition font-medium"
+                    className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium"
                   >
                     Decline
                   </button>
@@ -290,7 +280,7 @@ export default function FriendsDashboard() {
         </div>
       )}
 
-      {/* Friends List */}
+      {/* ---------- Friends List ---------- */}
       {activeTab === "friends" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {friends.length === 0 ? (
@@ -310,40 +300,37 @@ export default function FriendsDashboard() {
                     }
                     alt={friend.name}
                     className="w-24 h-24 rounded-full object-cover mb-4"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = "/default_profile.png";
-                    }}
                   />
                   <h3 className="text-xl font-semibold text-center">{friend.name}</h3>
                   <p className="text-gray-400 text-center mb-4">@{friend.username}</p>
-                  
-                  {/* Action Buttons */}
+
                   <div className="w-full space-y-2">
+                    {/* Message Button */}
                     <button
                       onClick={() => handleMessage(friend.id)}
                       disabled={messagingFriend === friend.id}
-                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition font-medium flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {messagingFriend === friend.id ? (
                         <>
                           <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                          <span>Opening...</span>
+                          Opening...
                         </>
                       ) : (
                         <>
                           <MessageCircle size={18} />
-                          <span>Message</span>
+                          Message
                         </>
                       )}
                     </button>
-                    
+
+                    {/* Unfriend */}
                     <button
                       onClick={() => handleUnfriend(friend.id)}
-                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg transition font-medium flex items-center justify-center gap-2"
+                      className="w-full px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg flex items-center justify-center gap-2"
                     >
                       <UserMinus size={18} />
-                      <span>Unfriend</span>
+                      Unfriend
                     </button>
                   </div>
                 </div>
@@ -353,7 +340,7 @@ export default function FriendsDashboard() {
         </div>
       )}
 
-      {/* Outgoing Requests */}
+      {/* ---------- Outgoing Requests ---------- */}
       {activeTab === "outgoing" && (
         <div className="space-y-4">
           {outgoingRequests.length === 0 ? (
@@ -373,10 +360,6 @@ export default function FriendsDashboard() {
                     }
                     alt={req.name}
                     className="w-16 h-16 rounded-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.src = "/default_profile.png";
-                    }}
                   />
                   <div>
                     <h3 className="text-xl font-semibold">{req.name}</h3>
@@ -384,9 +367,10 @@ export default function FriendsDashboard() {
                     <p className="text-sm text-gray-500">Request pending</p>
                   </div>
                 </div>
+
                 <button
                   onClick={() => handleCancel(req.receiver_id!)}
-                  className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition font-medium"
+                  className="px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium"
                 >
                   Cancel Request
                 </button>
@@ -395,6 +379,7 @@ export default function FriendsDashboard() {
           )}
         </div>
       )}
+
     </div>
   );
 }

@@ -8,26 +8,78 @@ import DiscoverDashboard from "./components/DiscoverDashbaord";
 import MainLayout from "./layouts/MainLayout";
 import VideoCallPage from "./components/VideoCallPage";
 import ChatPage from "./components/ChatPage";
+import ProtectedRoute, { PublicRoute } from "./components/ProtectedRoute";
+
 function App() {
   return (
     <Router>
       <Routes>
-        
-        {/* Home without Sidebar */}
-        <Route path="/" element={<Home />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-
-        {/* Pages WITH Sidebar */}
+        <Route 
+          path="/" 
+          element={
+            <PublicRoute>
+              <Home />
+            </PublicRoute>
+          } 
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          }
+        />
         <Route element={<MainLayout />}>
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/messages" element={<Messages />} />
-            <Route path="/chat/:chatRoomId" element={<ChatPage />} />
-           <Route path="/video-call/:chatRoomId" element={<VideoCallPage />} />
-          <Route path="/friends" element={<Friends />} />
-          <Route path="/discover" element={<DiscoverDashboard />} />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <ProtectedRoute>
+                <Messages />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/chat/:chatRoomId"
+            element={
+              <ProtectedRoute>
+                <ChatPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/video-call/:chatRoomId"
+            element={
+              <ProtectedRoute>
+                <VideoCallPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/friends"
+            element={
+              <ProtectedRoute>
+                <Friends />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/discover"
+            element={
+              <ProtectedRoute>
+                <DiscoverDashboard />
+              </ProtectedRoute>
+            }
+          />
         </Route>
-
-        {/* 404 */}
         <Route path="*" element={<h1>404 - Page Not Found</h1>} />
 
       </Routes>
