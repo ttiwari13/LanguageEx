@@ -36,7 +36,6 @@ const Sidebar = ({ onClose, compact = false }: SidebarProps) => {
   }, []);
 
   const items = [
-    { icon: <Home size={22} />, label: "Home", path: "/" },
     { icon: <MessageCircle size={22} />, label: "Messages", path: "/messages" },
     { icon: <Camera size={22} />, label: "Discover", path: "/discover" },
     { icon: <User2 size={22} />, label: "Friends", path: "/friends" },

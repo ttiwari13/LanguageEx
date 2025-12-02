@@ -3,7 +3,6 @@ import { Home, MessageCircle, Camera, User2, Settings2 } from "lucide-react";
 
 const MobileBottomNav = () => {
   const items = [
-    { icon: <Home size={20} />, label: "Home", path: "/" },
     { icon: <MessageCircle size={20} />, label: "Messages", path: "/messages" },
     { icon: <Camera size={20} />, label: "Discover", path: "/discover" },
     { icon: <User2 size={20} />, label: "Friends", path: "/friends" },

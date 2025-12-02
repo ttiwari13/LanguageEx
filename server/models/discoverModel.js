@@ -1,5 +1,6 @@
 const pool = require("../configs/db");
 const isDevelopment = process.env.NODE_ENV === 'development';
+
 const Discover = {
   async getDiscoverFeedWithCount(currentUserId, filters = {}) {
     const {
@@ -23,12 +24,27 @@ const Discover = {
         last_seen
       FROM users
       WHERE id != $1
+        AND id NOT IN (
+          SELECT receiver_id FROM friend_requests 
+          WHERE sender_id = $1 AND status = 'accepted'
+          UNION
+          SELECT sender_id FROM friend_requests 
+          WHERE receiver_id = $1 AND status = 'accepted'
+        )
     `;
     let countQuery = `
       SELECT COUNT(*) as total
       FROM users
       WHERE id != $1
+        AND id NOT IN (
+          SELECT receiver_id FROM friend_requests 
+          WHERE sender_id = $1 AND status = 'accepted'
+          UNION
+          SELECT sender_id FROM friend_requests 
+          WHERE receiver_id = $1 AND status = 'accepted'
+        )
     `;
+
     let values = [currentUserId];
     let countValues = [currentUserId];
     let param = 2;
@@ -56,8 +72,10 @@ const Discover = {
       countValues.push(interests);
       param++;
     }
+
     query += whereClause;
     countQuery += whereClause;
+
     query += `
       ORDER BY is_online DESC, last_seen DESC NULLS LAST
       LIMIT $${param} OFFSET $${param + 1}
@@ -68,6 +86,7 @@ const Discover = {
     if (isDevelopment) {
       console.log('Executing query with filters:', { seeking_language, offering_language, interests });
     }
+
     const [dataResult, countResult] = await Promise.all([
       pool.query(query, values),
       pool.query(countQuery, countValues)

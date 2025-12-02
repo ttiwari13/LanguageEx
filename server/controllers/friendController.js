@@ -3,41 +3,43 @@ const ChatRoom = require("../models/chatRoom");
 
 const friendController = {
   async send(req, res) {
-    try {
-      console.log("=== SEND REQUEST ===");
-      console.log("req.user:", req.user);
-      console.log("req.body:", req.body);
+  try {
+    console.log("=== SEND REQUEST ===");
+    console.log("req.user:", req.user);
+    console.log("req.body:", req.body);
 
-      if (!req.user || !req.user.id) {
-        return res.status(401).json({ error: "User not authenticated" });
-      }
-
-      const sender_id = req.user.id;
-      const { receiver_id } = req.body;
-
-      if (!receiver_id) {
-        return res.status(400).json({ error: "receiver_id is required" });
-      }
-      
-      if (sender_id === receiver_id) {
-        return res.status(400).json({ error: "Cannot send request to yourself" });
-      }
-      const request = await FriendRequest.sendRequest(sender_id, receiver_id);
-      if (request.status === 'accepted') {
-        const chatRoom = await ChatRoom.createChatRoom(sender_id, receiver_id);
-        res.json({ 
-          message: "You are now friends!", 
-          request,
-          chatRoomId: chatRoom.id 
-        });
-      } else {
-        res.json({ message: "Request sent", request });
-      }
-    } catch (error) {
-      console.error("SEND REQUEST ERROR:", error);
-      res.status(500).json({ error: error.message });
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "User not authenticated" });
     }
-  },
+
+    const sender_id = req.user.id;
+    const { receiver_id } = req.body;
+
+    if (!receiver_id) {
+      return res.status(400).json({ message: "receiver_id is required" });
+    }
+    
+    if (sender_id === receiver_id) {
+      return res.status(400).json({ message: "Cannot send request to yourself" });
+    }
+
+    const request = await FriendRequest.sendRequest(sender_id, receiver_id);
+    
+    if (request.status === 'accepted') {
+      const chatRoom = await ChatRoom.createChatRoom(sender_id, receiver_id);
+      res.json({ 
+        message: "You are now friends!", 
+        request,
+        chatRoomId: chatRoom.id 
+      });
+    } else {
+      res.json({ message: "Request sent", request });
+    }
+  } catch (error) {
+    console.error("SEND REQUEST ERROR:", error);
+    res.status(400).json({ message: error.message });
+  }
+},
 
   async accept(req, res) {
     try {
@@ -67,6 +69,7 @@ const friendController = {
       res.status(500).json({ error: error.message });
     }
   },
+
   async reject(req, res) {
     try {
       const { request_id } = req.body;
@@ -82,51 +85,18 @@ const friendController = {
       res.status(500).json({ error: error.message });
     }
   },
-  async friends(req, res) {
+  async getAllData(req, res) {
     try {
-
       if (!req.user || !req.user.id) {
         return res.status(401).json({ error: "User not authenticated" });
       }
 
       const userId = req.user.id;
-      const list = await FriendRequest.getFriends(userId);
+      const data = await FriendRequest.getAllFriendData(userId);
       
-      res.json(list);
+      res.json(data);
     } catch (error) {
-      console.error("GET FRIENDS ERROR:", error);
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  async pending(req, res) {
-    try {
-      if (!req.user || !req.user.id) {
-        return res.status(401).json({ error: "User not authenticated" });
-      }
-
-      const userId = req.user.id;  
-      const pending = await FriendRequest.getPendingRequests(userId);
-      res.json(pending);
-    } catch (error) {
-      console.error("GET PENDING ERROR:", error);
-      res.status(500).json({ error: error.message });
-    }
-  },
-  async incoming(req, res) {
-    try {
-
-      if (!req.user || !req.user.id) {
-        return res.status(401).json({ error: "User not authenticated" });
-      }
-
-      const userId = req.user.id;  
-      const incoming = await FriendRequest.getIncomingRequests(userId);
-      
-      res.json(incoming);
-    } catch (error) {
-      console.error("GET INCOMING ERROR:", error);
-      console.error("Error stack:", error.stack);
+      console.error("GET ALL FRIEND DATA ERROR:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -155,7 +125,6 @@ const friendController = {
 
   async unfriend(req, res) {
     try {
-
       if (!req.user || !req.user.id) {
         return res.status(401).json({ error: "User not authenticated" });
       }
@@ -173,6 +142,7 @@ const friendController = {
       res.status(500).json({ error: error.message });
     }
   },
+
   async createChat(req, res) {
     try {
       if (!req.user || !req.user.id) {
@@ -185,19 +155,14 @@ const friendController = {
       if (!friend_id) {
         return res.status(400).json({ error: "friend_id is required" });
       }
-
-      // Check if they are friends
       const friendCheck = await FriendRequest.checkIfFriends(userId, friend_id);
       
       if (!friendCheck) {
         return res.status(403).json({ error: "You are not friends with this user" });
       }
-
-      // Check if chat room already exists
       const existingChat = await ChatRoom.getChatRoomByUsers(userId, friend_id);
 
       if (existingChat) {
-        // Chat room exists, return it
         return res.json({
           success: true,
           message: "Chat room already exists",
@@ -205,8 +170,6 @@ const friendController = {
           chat_room_id: existingChat.id
         });
       }
-
-      // Create new chat room
       const newChatRoom = await ChatRoom.createChatRoom(userId, friend_id);
 
       res.json({
