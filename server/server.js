@@ -17,9 +17,9 @@ setTimeout(() => {
   const VideoCall = require("./models/videoCall");
 }, 1000);
 dotenv.config();
-const app = express();
+
 app.use(cors({
-  origin: "http://localhost:3000",
+  origin: ["http://localhost:3000","https://langex.netlify.app"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
@@ -29,7 +29,7 @@ app.get("/", (req, res) => res.send("Server running"));
 const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: ["http://localhost:3000","https://langex.netlify.app"],
     methods: ["GET", "POST"],
     credentials: true
   }
