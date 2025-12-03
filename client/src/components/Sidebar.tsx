@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+
 import { NavLink } from "react-router-dom";
 import {MessageCircle, Camera, User2, Settings2 } from "lucide-react";
 
@@ -6,18 +6,18 @@ interface SidebarProps {
   onClose?: () => void;
   compact?: boolean;
 }
-
+{/*}
 interface UserProfile {
   name?: string;
   fullname?: string;
   username?: string;
   profile_image_public_id?: string;
-}
+}*/}
 
 const Sidebar = ({ onClose, compact = false }: SidebarProps) => {
-  const [user, setUser] = useState<UserProfile | null>(null);
+ // const [user, setUser] = useState<UserProfile | null>(null);
 
-  useEffect(() => {
+ {/*} useEffect(() => {
     const token = localStorage.getItem("token");
     if (!token) return;
 
@@ -33,7 +33,7 @@ const Sidebar = ({ onClose, compact = false }: SidebarProps) => {
         setUser(u);
       })
       .catch((err) => console.error("Sidebar user fetch error:", err));
-  }, []);
+  }, []);*/}
 
   const items = [
     { icon: <MessageCircle size={22} />, label: "Messages", path: "/messages" },
