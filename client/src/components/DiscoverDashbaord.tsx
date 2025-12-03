@@ -337,7 +337,7 @@ const handleAddFriend = async (receiver_id: number) => {
       {/* Loading indicator during pagination */}
       {loading && partners.length > 0 && (
         <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#A3B496] mx-auto"></div>
         </div>
       )}
 

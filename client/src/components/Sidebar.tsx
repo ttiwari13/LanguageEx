@@ -48,16 +48,16 @@ const Sidebar = ({ onClose, compact = false }: SidebarProps) => {
       <div className={`p-6 border-b border-gray-800 ${compact ? "flex justify-center" : ""}`}>
         <div className="flex items-center justify-between">
           <h1
-            className={`text-2xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent ${
+            className={`text-2xl font-bold bg-gradient-to-r from-[#A3B496] to-[#A3B496] bg-clip-text text-transparent ${
               compact ? "hidden" : ""
             }`}
           >
-            Flamess
+            Voxy
           </h1>
 
           {compact && (
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 flex items-center justify-center text-xl font-bold">
-              F
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-[#A3B496] to-[#A3B496] flex items-center justify-center text-xl font-bold">
+              V
             </div>
           )}
         </div>
@@ -77,7 +77,7 @@ const Sidebar = ({ onClose, compact = false }: SidebarProps) => {
                 } px-4 py-3.5 rounded-xl transition-all duration-300 group relative
                   ${
                     isActive
-                      ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/50"
+                      ? "bg-gradient-to-r from-[#A3B496] to-[#A3B496] text-white shadow-lg shadow-[#A3B496]"
                       : "text-gray-400 hover:text-white hover:bg-gray-800/50"
                   }`
               }

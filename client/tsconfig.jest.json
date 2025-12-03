@@ -6,5 +6,7 @@
     "verbatimModuleSyntax": false,
     "jsx": "react-jsx"
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/__tests__"]
+
 }

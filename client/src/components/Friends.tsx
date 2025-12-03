@@ -290,7 +290,7 @@ export default function FriendsDashboard() {
     return (
       <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="animate-spin h-12 w-12 text-blue-500 mx-auto mb-4" />
+          <Loader2 className="animate-spin h-12 w-12 text-[#A3B496] mx-auto mb-4" />
           <p className="text-xl">Loading friends...</p>
         </div>
       </div>
@@ -314,7 +314,7 @@ export default function FriendsDashboard() {
           onClick={() => setActiveTab("incoming")}
           className={`px-6 py-3 font-semibold flex items-center transition ${
             activeTab === "incoming"
-              ? "border-b-2 border-blue-500 text-blue-500"
+              ? "border-b-2 border-[#A3B496] text-[#cddbc1]"
               : "text-gray-400 hover:text-white"
           }`}
         >
@@ -326,7 +326,7 @@ export default function FriendsDashboard() {
           onClick={() => setActiveTab("friends")}
           className={`px-6 py-3 font-semibold flex items-center transition ${
             activeTab === "friends"
-              ? "border-b-2 border-blue-500 text-blue-500"
+              ? "border-b-2 border-[#A3B496] text-[#d1dfc7]"
               : "text-gray-400 hover:text-white"
           }`}
         >
@@ -337,7 +337,7 @@ export default function FriendsDashboard() {
           onClick={() => setActiveTab("outgoing")}
           className={`px-6 py-3 font-semibold flex items-center transition ${
             activeTab === "outgoing"
-              ? "border-b-2 border-blue-500 text-blue-500"
+              ? "border-b-2 border-[#A3B496] text-[#e3eddc]"
               : "text-gray-400 hover:text-white"
           }`}
         >
@@ -378,7 +378,7 @@ export default function FriendsDashboard() {
                   <button
                     onClick={() => handleAccept(req.id)}
                     disabled={acceptingId === req.id}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg font-medium disabled:opacity-50 flex items-center gap-2"
+                    className="px-6 py-2 bg-[#A3B496] hover:bg-[#c8d5be] rounded-lg font-medium disabled:opacity-50 flex items-center gap-2"
                   >
                     {acceptingId === req.id ? (
                       <>
@@ -440,7 +440,7 @@ export default function FriendsDashboard() {
                     <button
                       onClick={() => handleMessage(friend.id)}
                       disabled={messagingId === friend.id || unfriendingId === friend.id}
-                      className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full px-4 py-2 bg-[#A3B496] hover:bg-[#b9c6af] rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       {messagingId === friend.id ? (
                         <>
