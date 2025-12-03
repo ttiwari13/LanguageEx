@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { Home, MessageCircle, Camera, User2, Settings2 } from "lucide-react";
+import { MessageCircle, Camera, User2, Settings2 } from "lucide-react";
 
 const MobileBottomNav = () => {
   const items = [
