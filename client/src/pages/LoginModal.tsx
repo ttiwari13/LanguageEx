@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { X, Lock, User, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useNavigate } from "react-router-dom";
-
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 // Define the theme color for easy reference
 const PRIMARY_COLOR = '#8B9D7C'; 
 
@@ -58,7 +58,7 @@ export default function LoginModal({ isOpen, onClose, onSignupClick }: LoginModa
     if (Object.keys(newErrors).length === 0) {
       setLoading(true);
       try {
-        const response = await fetch("http://localhost:4000/api/users/login", {
+        const response = await fetch(`${API_URL}/api/users/login`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username: formData.username, password: formData.password }),

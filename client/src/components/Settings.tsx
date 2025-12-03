@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Camera, Mail, MapPin, Globe, MessageSquare, Lock, Eye, EyeOff, Save, LogOut } from "lucide-react";
-
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 const Settings = () => {
   const navigate = useNavigate();
   
@@ -47,7 +47,7 @@ const Settings = () => {
         return;
       }
 
-      const response = await fetch('http://localhost:4000/api/users/me', {
+      const response = await fetch(`${API_URL}/api/users/me`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -113,7 +113,7 @@ const Settings = () => {
     const token = localStorage.getItem('token');
 
     // Send to backend
-    const response = await fetch('http://localhost:4000/api/upload/profile-image', {
+    const response = await fetch(`${API_URL}/api/upload/profile-image`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -182,7 +182,7 @@ const Settings = () => {
 
     const token = localStorage.getItem('token');
     
-    const response = await fetch('http://localhost:4000/api/users/update', {
+    const response = await fetch(`${API_URL}/api/users/update`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

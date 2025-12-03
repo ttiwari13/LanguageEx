@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X, Mail, Lock, User, Eye, EyeOff, Globe, MessageSquare } from 'lucide-react';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 interface FormData {
   name: string;
@@ -132,7 +133,7 @@ export default function SignupModal({ isOpen, onClose, onLoginClick }: SignupMod
     if (Object.keys(newErrors).length === 0) {
       setIsLoading(true);
       try {
-        const response = await fetch("http://localhost:4000/api/users/signup", {
+        const response = await fetch(`${API_URL}/api/users/signup`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

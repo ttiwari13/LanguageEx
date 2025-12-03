@@ -36,7 +36,7 @@ const Toast = ({ message, type, onClose }: { message: string; type: 'success' | 
   );
 };
 
-const API_BASE_URL = "http://localhost:4000/api";
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 export default function FriendsDashboard() {
   const [incomingRequests, setIncomingRequests] = useState<FriendRequest[]>([]);
@@ -76,7 +76,7 @@ export default function FriendsDashboard() {
       if (!headers) return;
 
       const response = await axios.get(
-        `${API_BASE_URL}/friends/all`,
+        `${API_URL}/api/friends/all`,
         { headers }
       );
 
@@ -129,7 +129,7 @@ export default function FriendsDashboard() {
       }
 
       await axios.post(
-        `${API_BASE_URL}/friends/accept`,
+        `${API_URL}/api/friends/accept`,
         { request_id: requestId },
         { headers }
       );
@@ -161,7 +161,7 @@ export default function FriendsDashboard() {
         return;
       }
       await axios.post(
-        `${API_BASE_URL}/friends/reject`,
+        `${API_URL}/api/friends/reject`,
         { request_id: requestId },
         { headers }
       );
@@ -194,7 +194,7 @@ export default function FriendsDashboard() {
       }
 
       await axios.delete(
-        `${API_BASE_URL}/friends/cancel/${receiverId}`,
+        `${API_URL}/api/friends/cancel/${receiverId}`,
         { headers }
       );
       showToast("Request cancelled", "success");
@@ -231,7 +231,7 @@ export default function FriendsDashboard() {
       }
 
       await axios.delete(
-        `${API_BASE_URL}/friends/unfriend/${friendId}`,
+        `${API_URL}/api/friends/unfriend/${friendId}`,
         { headers }
       );
       showToast("Unfriended successfully", "success");
@@ -259,7 +259,7 @@ export default function FriendsDashboard() {
       }
 
       const response = await axios.post(
-        `${API_BASE_URL}/friends/create-chat`,
+        `${API_URL}/api/friends/create-chat`,
         { friend_id: friendId },
         { headers }
       );

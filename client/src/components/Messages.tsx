@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import { Video, Edit, Search, Trash2 } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 interface ChatRoom {
   chat_room_id: number;
   friend_id: number;
@@ -58,7 +60,7 @@ const MessagesPage = () => {
   }, []);
 
   const initializeSocket = () => {
-    socket = io("http://localhost:4000");
+    socket = io(API_URL);
 
     const userId = localStorage.getItem("userId");
     if (userId) {
@@ -103,7 +105,7 @@ const MessagesPage = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:4000/api/chats", {
+      const res = await axios.get(`${API_URL}/api/chats`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setChatRooms(res.data.chatRooms);
@@ -136,7 +138,7 @@ const MessagesPage = () => {
       const token = localStorage.getItem("token");
 
       const response = await axios.delete(
-        `http://localhost:4000/api/chats/${chatRoomId}`,
+        `${API_URL}/api/chats/${chatRoomId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }

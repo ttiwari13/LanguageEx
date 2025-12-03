@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import useDebounce from "../hooks/useDebounce";
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 interface User {
   id: number;
   name: string;
@@ -19,7 +21,7 @@ const DiscoverDashboard = () => {
   const [partners, setPartners] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [requestSent, setRequestSent] = useState<Set<number>>(new Set());
-
+  
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [limit] = useState<number>(12);
@@ -38,7 +40,7 @@ const fetchDiscover = async (pageNumber: number = 1) => {
 
     const token = localStorage.getItem("token");
     if (!token) return;
-    const friendDataRes = await axios.get("http://localhost:4000/api/friends/all", {
+    const friendDataRes = await axios.get(`${API_URL}/api/friends/all`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     
@@ -47,7 +49,7 @@ const fetchDiscover = async (pageNumber: number = 1) => {
 );
     setFriendIds(currentFriendIds);
 
-    let url = `http://localhost:4000/api/discover?page=${pageNumber}&limit=${limit}`;
+    let url = `${API_URL}/api/discover?page=${pageNumber}&limit=${limit}`;
 
     if (debouncedOffering) url += `&offering_language=${encodeURIComponent(debouncedOffering)}`;
     if (debouncedSeeking) url += `&seeking_language=${encodeURIComponent(debouncedSeeking)}`;
@@ -90,7 +92,7 @@ const handleAddFriend = async (receiver_id: number) => {
     }
 
     const response = await axios.post(
-      "http://localhost:4000/api/friends/send",
+      `${API_URL}/api/friends/send`,
       { receiver_id },
       { headers: { Authorization: `Bearer ${token}` } }
     );
