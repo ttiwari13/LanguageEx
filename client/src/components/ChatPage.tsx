@@ -39,8 +39,6 @@ interface ChatRoomInfo {
   is_online: boolean;
 }
 
-let socket: Socket;
-
 const ChatPage = () => {
   const { chatRoomId } = useParams<{ chatRoomId: string }>();
   const navigate = useNavigate();
@@ -59,6 +57,9 @@ const ChatPage = () => {
   const [deleteType, setDeleteType] = useState<"me" | "everyone" | null>(null);
   const [contextMenuMessageId, setContextMenuMessageId] = useState<number | null>(null);
   const [showClearChatModal, setShowClearChatModal] = useState(false);
+  
+  // Use refs for persistent values
+  const socketRef = useRef<Socket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<number | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -80,16 +81,18 @@ const ChatPage = () => {
     }
   };
 
-useEffect(() => {
+  useEffect(() => {
     initializeChat();
 
     return () => {
-      if (socket) {
+      // Cleanup on unmount
+      if (socketRef.current) {
         const userId = localStorage.getItem("userId");
         if (userId) {
-          socket.emit("user-offline", parseInt(userId));
+          socketRef.current.emit("user-offline", parseInt(userId));
         }
-        socket.disconnect();
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
@@ -112,70 +115,108 @@ useEffect(() => {
   }, [contextMenuMessageId]);
 
   const initializeChat = async () => {
-    socket = io(API_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-    });
-    
-    socket.on('connect', () => {
-      console.log('Socket connected:', socket.id);
+    // Only create socket if it doesn't exist
+    if (!socketRef.current) {
+      socketRef.current = io(API_URL, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+      });
       
-      const userId = localStorage.getItem("userId");
-      if (userId) {
-        socket.emit("user-online", parseInt(userId));
-        console.log('Emitted user-online for userId:', userId);
-      }
+      socketRef.current.on('connect', () => {
+        console.log('Socket connected:', socketRef.current?.id);
+        
+        const userId = localStorage.getItem("userId");
+        if (userId) {
+          socketRef.current?.emit("user-online", parseInt(userId));
+          console.log('Emitted user-online for userId:', userId);
+        }
 
-      socket.emit("join-chat-room", chatRoomId);
-      console.log('Joined chat room:', chatRoomId);
-    });
+        socketRef.current?.emit("join-chat-room", chatRoomId);
+        console.log('Joined chat room:', chatRoomId);
+      });
 
-    socket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error);
-    });
+      socketRef.current.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+      });
 
-    setupSocketListeners();
+      socketRef.current.on('disconnect', (reason) => {
+        console.log('Socket disconnected:', reason);
+      });
 
+      setupSocketListeners();
+    }
+
+    // Fetch initial data
     await Promise.all([fetchMessages(), fetchRoomInfo()]);
+    
+    // After room info is loaded, request fresh status
+    if (socketRef.current && roomInfo) {
+      console.log('Requesting status for friend:', roomInfo.friend_id);
+      socketRef.current.emit("check-user-status", roomInfo.friend_id);
+    }
     
     setLoading(false);
   };
 
   const setupSocketListeners = () => {
-    socket.on("new-message", (message: Message) => {
+    if (!socketRef.current) return;
+
+    socketRef.current.on("new-message", (message: Message) => {
       console.log('Received new message:', message);
       setMessages((prev) => [...prev, message]);
       scrollToBottom();
     });
 
-    socket.on("message-deleted", ({ messageId }: { messageId: number }) => {
+    socketRef.current.on("message-deleted", ({ messageId }: { messageId: number }) => {
       console.log('Message deleted:', messageId);
       setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
     });
 
-    socket.on("user-typing", () => {
+    socketRef.current.on("user-typing", () => {
       setIsTyping(true);
     });
 
-    socket.on("user-stopped-typing", () => {
+    socketRef.current.on("user-stopped-typing", () => {
       setIsTyping(false);
     });
 
-    socket.on("user-status-change", ({ userId, isOnline }: { userId: number; isOnline: boolean }) => {
-      console.log(`User ${userId} status changed to:`, isOnline);
+    socketRef.current.on("user-status-change", ({ userId, isOnline }: { userId: number; isOnline: boolean }) => {
+      console.log(`Status change received: User ${userId} is now ${isOnline ? 'ONLINE ✅' : 'OFFLINE ❌'}`);
+      
+      setRoomInfo((prev) => {
+        if (!prev) {
+          console.log('No room info available yet');
+          return prev;
+        }
+        
+        console.log(`Friend ID: ${prev.friend_id}, Received userId: ${userId}`);
+        
+        if (prev.friend_id === userId) {
+          console.log(`Updating status from ${prev.is_online} to ${isOnline}`);
+          return { ...prev, is_online: isOnline };
+        }
+        
+        console.log(`Not updating - different user (Friend: ${prev.friend_id}, Update for: ${userId})`);
+        return prev;
+      });
+    });
+
+    // New listener for status response
+    socketRef.current.on("user-status-response", ({ userId, isOnline }: { userId: number; isOnline: boolean }) => {
+      console.log(`Status response: User ${userId} is ${isOnline ? 'ONLINE ✅' : 'OFFLINE ❌'}`);
       
       setRoomInfo((prev) => {
         if (prev && prev.friend_id === userId) {
-          console.log(`Updating friend status from ${prev.is_online} to ${isOnline}`);
+          console.log(`Updating status from ${prev.is_online} to ${isOnline}`);
           return { ...prev, is_online: isOnline };
         }
         return prev;
       });
     });
 
-    socket.on("incoming-call", ({ callerId, chatRoomId: incomingChatRoomId, offer }) => {
+    socketRef.current.on("incoming-call", ({ callerId, chatRoomId: incomingChatRoomId, offer }) => {
       console.log('Incoming call from:', callerId);
       
       const confirmCall = window.confirm(`Incoming video call from ${roomInfo?.friend_name}. Accept?`);
@@ -190,20 +231,20 @@ useEffect(() => {
           },
         });
       } else {
-        socket.emit("reject-call", { callerId });
+        socketRef.current?.emit("reject-call", { callerId });
       }
     });
 
-    socket.on("call-failed", ({ message }) => {
+    socketRef.current.on("call-failed", ({ message }) => {
       console.error('Call failed:', message);
       alert(message);
     });
 
-    socket.on("call-accepted", ({ answer }) => {
+    socketRef.current.on("call-accepted", ({ answer }) => {
       console.log('Call accepted with answer:', answer);
     });
 
-    socket.on("call-rejected", () => {
+    socketRef.current.on("call-rejected", () => {
       console.log('Call was rejected');
       alert('Call was rejected by the other user');
     });
@@ -237,6 +278,14 @@ useEffect(() => {
       if (room) {
         setRoomInfo(room);
         console.log('Room info loaded:', room);
+        console.log(`Friend: ${room.friend_name} (ID: ${room.friend_id})`);
+        console.log(`Initial status: ${room.is_online ? 'ONLINE' : 'OFFLINE'}`);
+        
+        // Request fresh status after room info is loaded
+        if (socketRef.current && socketRef.current.connected) {
+          console.log('Requesting fresh status for friend:', room.friend_id);
+          socketRef.current.emit("check-user-status", room.friend_id);
+        }
       }
     } catch (err) {
       console.error("Error fetching room info:", err);
@@ -259,7 +308,7 @@ useEffect(() => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      socket.emit("send-message", res.data.message);
+      socketRef.current?.emit("send-message", res.data.message);
       setNewMessage("");
       scrollToBottom();
     } catch (err) {
@@ -285,7 +334,7 @@ useEffect(() => {
       });
 
       if (deleteType === "everyone") {
-        socket.emit("delete-message", {
+        socketRef.current?.emit("delete-message", {
           chatRoomId,
           messageId: messageToDelete.id,
         });
@@ -319,7 +368,7 @@ useEffect(() => {
       });
       
       setMessages([]); 
-      socket.emit("clear-chat-history", chatRoomId); 
+      socketRef.current?.emit("clear-chat-history", chatRoomId); 
 
       alert("Chat history cleared!");
     } catch (err) {
@@ -406,7 +455,7 @@ useEffect(() => {
         }
       );
 
-      socket.emit("send-message", res.data.message);
+      socketRef.current?.emit("send-message", res.data.message);
       setAudioBlob(null);
       setRecordingTime(0);
       scrollToBottom();
@@ -417,7 +466,7 @@ useEffect(() => {
   };
 
   const handleTyping = () => {
-    socket.emit("typing", {
+    socketRef.current?.emit("typing", {
       chatRoomId,
       userId: currentUserId,
       userName: "User",
@@ -428,7 +477,7 @@ useEffect(() => {
     }
 
     typingTimeoutRef.current = window.setTimeout(() => {
-      socket.emit("stop-typing", { chatRoomId, userId: currentUserId });
+      socketRef.current?.emit("stop-typing", { chatRoomId, userId: currentUserId });
     }, 1000);
   };
 
