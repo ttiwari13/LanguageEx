@@ -21,7 +21,7 @@ setTimeout(() => {
 dotenv.config();
 const app = express();
 app.use(cors({
-  origin: ["http://localhost:3000","https://langex.netlify.app"],
+  origin: ["http://localhost:3000","https://69318d92057fd115e31ab2b9--langex.netlify.app/"],
   methods: ["GET", "POST", "PUT", "DELETE"],
   credentials: true
 }));
@@ -33,7 +33,7 @@ app.get("/", (req, res) => res.send("Server running"));
 const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
-    origin: ["http://localhost:3000","https://langex.netlify.app"],
+    origin: ["http://localhost:3000","https://69318d92057fd115e31ab2b9--langex.netlify.app/"],
     methods: ["GET", "POST"],
     credentials: true
   }
