@@ -64,6 +64,7 @@ const ChatPage = () => {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<number | null>(null);
   const currentUserId = parseInt(localStorage.getItem("userId") || "0");
+
   const canDeleteForEveryone = (messageDate: string): boolean => {
     try {
       const messageTime = new Date(messageDate).getTime();
@@ -91,6 +92,7 @@ const ChatPage = () => {
       }
     };
   }, [chatRoomId]);
+
   useEffect(() => {
     const handleClickOutside = () => {
       if (contextMenuMessageId !== null) {
@@ -103,14 +105,30 @@ const ChatPage = () => {
   }, [contextMenuMessageId]);
 
   const initializeChat = async () => {
-    socket = io(API_URL);
+    socket = io(API_URL, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
     
-    const userId = localStorage.getItem("userId");
-    if (userId) {
-      socket.emit("user-online", parseInt(userId));
-    }
+    socket.on('connect', () => {
+      console.log('Socket connected:', socket.id);
+      
+      const userId = localStorage.getItem("userId");
+      if (userId) {
+        socket.emit("user-online", parseInt(userId));
+        console.log('Emitted user-online for userId:', userId);
+      }
 
-    socket.emit("join-chat-room", chatRoomId);
+      socket.emit("join-chat-room", chatRoomId);
+      console.log('Joined chat room:', chatRoomId);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error);
+    });
+
     setupSocketListeners();
 
     await Promise.all([fetchMessages(), fetchRoomInfo()]);
@@ -120,11 +138,13 @@ const ChatPage = () => {
 
   const setupSocketListeners = () => {
     socket.on("new-message", (message: Message) => {
+      console.log('Received new message:', message);
       setMessages((prev) => [...prev, message]);
       scrollToBottom();
     });
 
     socket.on("message-deleted", ({ messageId }: { messageId: number }) => {
+      console.log('Message deleted:', messageId);
       setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
     });
 
@@ -137,13 +157,49 @@ const ChatPage = () => {
     });
 
     socket.on("user-status-change", ({ userId, isOnline }: { userId: number; isOnline: boolean }) => {
-  setRoomInfo((prev) => {
-    if (prev && prev.friend_id === userId) {
-      return { ...prev, is_online: isOnline };
-    }
-    return prev;
-  });
-});
+      console.log(`User ${userId} status changed to:`, isOnline);
+      
+      setRoomInfo((prev) => {
+        if (prev && prev.friend_id === userId) {
+          console.log(`Updating friend status from ${prev.is_online} to ${isOnline}`);
+          return { ...prev, is_online: isOnline };
+        }
+        return prev;
+      });
+    });
+
+    socket.on("incoming-call", ({ callerId, chatRoomId: incomingChatRoomId, offer }) => {
+      console.log('Incoming call from:', callerId);
+      
+      const confirmCall = window.confirm(`Incoming video call from ${roomInfo?.friend_name}. Accept?`);
+      
+      if (confirmCall) {
+        navigate(`/video-call/${incomingChatRoomId}`, {
+          state: {
+            friendId: callerId,
+            friendName: roomInfo?.friend_name,
+            isReceiver: true,
+            offer: offer,
+          },
+        });
+      } else {
+        socket.emit("reject-call", { callerId });
+      }
+    });
+
+    socket.on("call-failed", ({ message }) => {
+      console.error('Call failed:', message);
+      alert(message);
+    });
+
+    socket.on("call-accepted", ({ answer }) => {
+      console.log('Call accepted with answer:', answer);
+    });
+
+    socket.on("call-rejected", () => {
+      console.log('Call was rejected');
+      alert('Call was rejected by the other user');
+    });
   };
 
   const fetchMessages = async () => {
@@ -171,7 +227,10 @@ const ChatPage = () => {
         (r: ChatRoomInfo) => r.chat_room_id === parseInt(chatRoomId!)
       );
       
-      if (room) setRoomInfo(room);
+      if (room) {
+        setRoomInfo(room);
+        console.log('Room info loaded:', room);
+      }
     } catch (err) {
       console.error("Error fetching room info:", err);
     }
@@ -202,6 +261,7 @@ const ChatPage = () => {
       setIsSending(false); 
     }
   };
+
   const handleDeleteMessage = async () => {
     if (!messageToDelete || !deleteType) return;
 
@@ -241,6 +301,7 @@ const ChatPage = () => {
     setShowDeleteModal(true);
     setContextMenuMessageId(null);
   };
+
   const handleClearChat = async () => {
     setShowClearChatModal(false); 
     setLoading(true); 
@@ -262,7 +323,6 @@ const ChatPage = () => {
     }
   };
 
-  // Start audio recording
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -365,19 +425,35 @@ const ChatPage = () => {
     }, 1000);
   };
 
-  const startVideoCall = () => {
+  const startVideoCall = async () => {
     if (!roomInfo?.is_online) {
       alert(`${roomInfo?.friend_name} is currently offline`);
       return;
     }
 
-    navigate(`/video-call/${chatRoomId}`, {
-      state: {
-        friendId: roomInfo.friend_id,
-        friendName: roomInfo.friend_name,
-        isReceiver: false,
-      },
-    });
+    try {
+      const token = localStorage.getItem("token");
+      
+      const response = await axios.post(
+        `${API_URL}/api/chats/${chatRoomId}/video-call`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      console.log('Video call initiated:', response.data);
+
+      navigate(`/video-call/${chatRoomId}`, {
+        state: {
+          friendId: roomInfo.friend_id,
+          friendName: roomInfo.friend_name,
+          isReceiver: false,
+          callId: response.data.videoCall.id,
+        },
+      });
+    } catch (error) {
+      console.error('Error initiating video call:', error);
+      alert('Failed to start video call');
+    }
   };
 
   const scrollToBottom = () => {
@@ -402,7 +478,6 @@ const ChatPage = () => {
 
   return (
     <div className="h-screen bg-black text-white flex flex-col">
-      {/* Header */}
       <div className="bg-gray-900 border-b border-gray-800">
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
@@ -460,7 +535,6 @@ const ChatPage = () => {
         </div>
       </div>
 
-      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-6" style={{ backgroundColor: '#000' }}>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-500">
@@ -479,7 +553,6 @@ const ChatPage = () => {
               return (
                 <div key={msg.id} className="w-full group relative">
                  {isOwn ? (
-                    // YOUR OWN MESSAGES
                     <div className="flex justify-end items-start gap-2">
                       <div className="relative flex-shrink-0">
                         <button
@@ -494,7 +567,6 @@ const ChatPage = () => {
 
                         {contextMenuMessageId === msg.id && (
                           <div className="absolute left-0 top-12 bg-gray-800 rounded-lg shadow-2xl py-2 z-20 border border-gray-600 min-w-[180px]">
-                            {/* Show "Delete for Everyone" only if within 1 hour */}
                             {canDeleteEveryone && (
                               <button
                                 onClick={(e) => {
@@ -538,7 +610,6 @@ const ChatPage = () => {
                       </div>
                     </div>
                   ) : (
-                    // FRIEND'S MESSAGES
                     <div className="flex justify-start items-end gap-2">
                       <div className="w-7 flex-shrink-0">
                         {showAvatar ? (
@@ -580,7 +651,6 @@ const ChatPage = () => {
 
                         {contextMenuMessageId === msg.id && (
                           <div className="absolute right-0 top-12 bg-gray-800 rounded-lg shadow-2xl py-2 z-20 border border-gray-600 min-w-[160px]">
-       
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -617,6 +687,7 @@ const ChatPage = () => {
           </div>
         )}
       </div>
+
       <div className="bg-gray-900 border-t border-gray-800 p-4">
         <div className="flex items-center gap-3 max-w-2xl mx-auto">
           {isRecording ? (
@@ -701,6 +772,7 @@ const ChatPage = () => {
           )}
         </div>
       </div>
+
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl max-w-sm w-full p-6 space-y-4">
@@ -744,6 +816,7 @@ const ChatPage = () => {
           </div>
         </div>
       )}
+
       {showClearChatModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-900 rounded-2xl max-w-sm w-full p-6 space-y-4">
@@ -758,7 +831,7 @@ const ChatPage = () => {
             </div>
 
             <p className="text-sm text-gray-400">
-              Are you sure you want to clear **all** messages in this chat room? This action cannot be undone.
+              Are you sure you want to clear all messages in this chat room? This action cannot be undone.
             </p>
             <div className="flex gap-3 pt-2">
               <button

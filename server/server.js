@@ -38,22 +38,25 @@ const io = socketio(server, {
     credentials: true
   }
 });
-
-let onlineUsers = new Map(); 
 let userSockets = new Map(); 
+let socketUsers = new Map(); 
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
   
   socket.on("user-online", async (userId) => {
-    onlineUsers.set(socket.id, userId);
     userSockets.set(userId, socket.id);
+    socketUsers.set(socket.id, userId);
+    
     await User.updateOnlineStatus(userId, true);
-    socket.broadcast.emit("user-status-change", { userId, isOnline: true });
+    io.emit("user-status-change", { userId, isOnline: true });
+    
+    console.log(`User ${userId} is now online with socket ${socket.id}`);
   });
   
   socket.on("join-chat-room", (chatRoomId) => {
     socket.join(`room-${chatRoomId}`);
+    console.log(`Socket ${socket.id} joined room-${chatRoomId}`);
   });
   
   socket.on("send-message", (messageData) => {
@@ -69,28 +72,31 @@ io.on("connection", (socket) => {
   });
   
   socket.on("delete-message", ({ chatRoomId, messageId }) => {
-    socket.to(chatRoomId).emit("message-deleted", { messageId });
+    io.to(`room-${chatRoomId}`).emit("message-deleted", { messageId });
   });
-  
   socket.on("call-user", async ({ callerId, receiverId, chatRoomId, offer }) => {
-  const receiverSocketId = onlineUsers.get(receiverId);
-  
-  if (!receiverSocketId) {
-    socket.emit("call-failed", { message: "User is offline" });
-    return;
-  }
+    console.log(`Call from ${callerId} to ${receiverId} in room ${chatRoomId}`);
+    const receiverSocketId = userSockets.get(receiverId);
+    
+    if (!receiverSocketId) {
+      console.log(`Receiver ${receiverId} is offline`);
+      socket.emit("call-failed", { message: "User is offline" });
+      return;
+    }
 
-  io.to(receiverSocketId).emit("incoming-call", {
-    callerId,
-    chatRoomId,
-    offer,
+    console.log(`Sending call to socket ${receiverSocketId}`);
+    io.to(receiverSocketId).emit("incoming-call", {
+      callerId,
+      chatRoomId,
+      offer,
+    });
   });
-});
   
   socket.on("accept-call", ({ callerId, answer }) => {
     const callerSocketId = userSockets.get(callerId);
     if (callerSocketId) {
       io.to(callerSocketId).emit("call-accepted", { answer });
+      console.log(`Call accepted, sending to ${callerSocketId}`);
     }
   });
   
@@ -98,6 +104,7 @@ io.on("connection", (socket) => {
     const callerSocketId = userSockets.get(callerId);
     if (callerSocketId) {
       io.to(callerSocketId).emit("call-rejected");
+      console.log(`Call rejected by receiver`);
     }
   });
   
@@ -122,14 +129,15 @@ io.on("connection", (socket) => {
   });
   
   socket.on("disconnect", async () => {
-    const userId = onlineUsers.get(socket.id);
+    const userId = socketUsers.get(socket.id);
 
     if (userId) {
       await User.updateOnlineStatus(userId, false);
-      socket.broadcast.emit("user-status-change", { userId, isOnline: false });
-
-      onlineUsers.delete(socket.id);
+      io.emit("user-status-change", { userId, isOnline: false });
       userSockets.delete(userId);
+      socketUsers.delete(socket.id);
+      
+      console.log(`User ${userId} disconnected`);
     }
   });
 });
