@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { io, Socket } from "socket.io-client";
+
 import { 
   Video, 
   Send, 
@@ -79,11 +80,17 @@ const ChatPage = () => {
     }
   };
 
-  useEffect(() => {
+useEffect(() => {
     initializeChat();
 
     return () => {
-      if (socket) socket.disconnect();
+      if (socket) {
+        const userId = localStorage.getItem("userId");
+        if (userId) {
+          socket.emit("user-offline", parseInt(userId));
+        }
+        socket.disconnect();
+      }
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
