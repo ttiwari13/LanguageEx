@@ -73,24 +73,19 @@ io.on("connection", (socket) => {
   });
   
   socket.on("call-user", async ({ callerId, receiverId, chatRoomId, offer }) => {
-    const receiverSocketId = userSockets.get(receiverId);
-    if (receiverSocketId) {
-      try {
-        const VideoCall = require("./models/videoCall");
-        await VideoCall.createVideoCall(chatRoomId, callerId, receiverId);
-      } catch (err) {
-        console.error("Error creating video call record:", err);
-      }
+  const receiverSocketId = onlineUsers.get(receiverId);
+  
+  if (!receiverSocketId) {
+    socket.emit("call-failed", { message: "User is offline" });
+    return;
+  }
 
-      io.to(receiverSocketId).emit("incoming-call", {
-        callerId,
-        chatRoomId,
-        offer
-      });
-    } else {
-      socket.emit("call-failed", { message: "User is offline" });
-    }
+  io.to(receiverSocketId).emit("incoming-call", {
+    callerId,
+    chatRoomId,
+    offer,
   });
+});
   
   socket.on("accept-call", ({ callerId, answer }) => {
     const callerSocketId = userSockets.get(callerId);

@@ -3,6 +3,8 @@ import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
 interface LocationState {
   friendId: number;
   friendName: string;
@@ -28,6 +30,12 @@ const VideoCallPage = () => {
   const localStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
+    if (!state?.friendId || !state?.friendName) {
+      console.error("Missing required state");
+      navigate("/messages");
+      return;
+    }
+
     initializeCall();
 
     return () => {
@@ -37,8 +45,8 @@ const VideoCallPage = () => {
 
   const initializeCall = async () => {
     try {
-      // Initialize socket
-      socket = io("http://localhost:4000");
+      // Initialize socket with API_URL
+      socket = io(API_URL);
       const userId = localStorage.getItem("userId");
       if (userId) {
         socket.emit("user-online", parseInt(userId));
@@ -59,19 +67,22 @@ const VideoCallPage = () => {
       // Setup WebRTC
       setupPeerConnection(stream);
 
-      // Setup socket listeners
+      // Setup socket listeners BEFORE initiating/accepting call
       setupSocketListeners();
+
+      // Small delay to ensure socket listeners are ready
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // If caller, initiate call
       if (!state.isReceiver) {
         await initiateCall();
-      } else {
+      } else if (state.offer) {
         // If receiver, accept call
         await acceptCall();
       }
     } catch (error) {
       console.error("Error initializing call:", error);
-      alert("Failed to access camera/microphone");
+      alert("Failed to access camera/microphone. Please check permissions.");
       navigate(-1);
     }
   };
@@ -81,6 +92,12 @@ const VideoCallPage = () => {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
+        // Free TURN server (consider getting your own for production)
+        {
+          urls: "turn:openrelay.metered.ca:80",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
       ],
     };
 
@@ -93,7 +110,8 @@ const VideoCallPage = () => {
 
     // Handle incoming tracks
     peerConnection.ontrack = (event) => {
-      if (remoteVideoRef.current) {
+      console.log("Received remote track");
+      if (remoteVideoRef.current && event.streams[0]) {
         remoteVideoRef.current.srcObject = event.streams[0];
         setCallStatus("Connected");
       }
@@ -102,6 +120,7 @@ const VideoCallPage = () => {
     // Handle ICE candidates
     peerConnection.onicecandidate = (event) => {
       if (event.candidate) {
+        console.log("Sending ICE candidate");
         socket.emit("ice-candidate", {
           targetUserId: state.friendId,
           candidate: event.candidate,
@@ -114,18 +133,29 @@ const VideoCallPage = () => {
       console.log("Connection state:", peerConnection?.connectionState);
       if (peerConnection?.connectionState === "connected") {
         setCallStatus("Connected");
+      } else if (peerConnection?.connectionState === "disconnected") {
+        setCallStatus("Disconnected");
       } else if (peerConnection?.connectionState === "failed") {
         setCallStatus("Connection failed");
+        setTimeout(() => endCall(), 2000);
       }
+    };
+
+    // Handle ICE connection state
+    peerConnection.oniceconnectionstatechange = () => {
+      console.log("ICE connection state:", peerConnection?.iceConnectionState);
     };
   };
 
   const setupSocketListeners = () => {
     // Listen for call acceptance
     socket.on("call-accepted", async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
+      console.log("Call accepted, setting remote description");
       try {
-        await peerConnection?.setRemoteDescription(new RTCSessionDescription(answer));
-        setCallStatus("Connected");
+        if (peerConnection && answer) {
+          await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+          setCallStatus("Connected");
+        }
       } catch (error) {
         console.error("Error setting remote description:", error);
       }
@@ -133,6 +163,7 @@ const VideoCallPage = () => {
 
     // Listen for ICE candidates
     socket.on("ice-candidate", async ({ candidate }: { candidate: RTCIceCandidateInit }) => {
+      console.log("Received ICE candidate");
       try {
         if (peerConnection && candidate) {
           await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
@@ -144,18 +175,25 @@ const VideoCallPage = () => {
 
     // Listen for call rejection
     socket.on("call-rejected", () => {
-      alert("Call was rejected");
+      alert(`${state.friendName} declined your call`);
       endCall();
     });
 
     // Listen for call end
     socket.on("call-ended", () => {
+      console.log("Call ended by other user");
       endCall();
     });
 
     // Listen for call failure
     socket.on("call-failed", ({ message }: { message: string }) => {
-      alert(message);
+      alert(message || "Call failed");
+      endCall();
+    });
+
+    // Listen for user offline
+    socket.on("user-offline-call", () => {
+      alert(`${state.friendName} is offline`);
       endCall();
     });
   };
@@ -164,10 +202,21 @@ const VideoCallPage = () => {
     try {
       setCallStatus("Calling...");
 
-      const offer = await peerConnection!.createOffer();
-      await peerConnection!.setLocalDescription(offer);
+      if (!peerConnection) {
+        console.error("Peer connection not initialized");
+        return;
+      }
+
+      const offer = await peerConnection.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
+      
+      await peerConnection.setLocalDescription(offer);
 
       const userId = localStorage.getItem("userId");
+      console.log("Emitting call-user event");
+      
       socket.emit("call-user", {
         callerId: parseInt(userId!),
         receiverId: state.friendId,
@@ -176,6 +225,8 @@ const VideoCallPage = () => {
       });
     } catch (error) {
       console.error("Error initiating call:", error);
+      alert("Failed to initiate call");
+      endCall();
     }
   };
 
@@ -183,19 +234,27 @@ const VideoCallPage = () => {
     try {
       setCallStatus("Accepting call...");
 
-      if (state.offer) {
-        await peerConnection!.setRemoteDescription(new RTCSessionDescription(state.offer));
-
-        const answer = await peerConnection!.createAnswer();
-        await peerConnection!.setLocalDescription(answer);
-
-        socket.emit("accept-call", {
-          callerId: state.friendId,
-          answer,
-        });
+      if (!peerConnection || !state.offer) {
+        console.error("Missing peer connection or offer");
+        return;
       }
+
+      await peerConnection.setRemoteDescription(new RTCSessionDescription(state.offer));
+
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      console.log("Emitting accept-call event");
+      socket.emit("accept-call", {
+        callerId: state.friendId,
+        answer,
+      });
+
+      setCallStatus("Connected");
     } catch (error) {
       console.error("Error accepting call:", error);
+      alert("Failed to accept call");
+      endCall();
     }
   };
 
@@ -220,10 +279,14 @@ const VideoCallPage = () => {
   };
 
   const endCall = () => {
-    socket.emit("end-call", {
-      targetUserId: state.friendId,
-      callId: null, // You can track this if needed
-    });
+    console.log("Ending call");
+    
+    if (socket && socket.connected) {
+      socket.emit("end-call", {
+        targetUserId: state.friendId,
+        chatRoomId: chatRoomId,
+      });
+    }
 
     cleanup();
     navigate("/messages");
@@ -232,7 +295,10 @@ const VideoCallPage = () => {
   const cleanup = () => {
     // Stop all tracks
     if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => track.stop());
+      localStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+      localStreamRef.current = null;
     }
 
     // Close peer connection
@@ -242,7 +308,7 @@ const VideoCallPage = () => {
     }
 
     // Disconnect socket
-    if (socket) {
+    if (socket && socket.connected) {
       socket.disconnect();
     }
   };
@@ -252,7 +318,7 @@ const VideoCallPage = () => {
       {/* Header */}
       <div className="p-4 bg-gray-900 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">{state.friendName}</h2>
+          <h2 className="text-xl font-semibold">{state?.friendName || "Unknown"}</h2>
           <p className="text-sm text-gray-400">{callStatus}</p>
         </div>
       </div>
@@ -264,11 +330,23 @@ const VideoCallPage = () => {
           ref={remoteVideoRef}
           autoPlay
           playsInline
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover bg-gray-900"
         />
 
+        {/* Placeholder when no remote video */}
+        {callStatus === "Calling..." && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+            <div className="text-center">
+              <div className="w-24 h-24 mx-auto mb-4 bg-gray-700 rounded-full flex items-center justify-center">
+                <Video size={40} className="text-gray-400" />
+              </div>
+              <p className="text-gray-400">Calling {state?.friendName}...</p>
+            </div>
+          </div>
+        )}
+
         {/* Local Video (Picture-in-Picture) */}
-        <div className="absolute top-4 right-4 w-48 h-36 bg-gray-800 rounded-lg overflow-hidden shadow-lg">
+        <div className="absolute top-4 right-4 w-48 h-36 bg-gray-800 rounded-lg overflow-hidden shadow-lg border-2 border-gray-700">
           <video
             ref={localVideoRef}
             autoPlay

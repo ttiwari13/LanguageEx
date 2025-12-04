@@ -137,10 +137,13 @@ const ChatPage = () => {
     });
 
     socket.on("user-status-change", ({ userId, isOnline }: { userId: number; isOnline: boolean }) => {
-      if (roomInfo && roomInfo.friend_id === userId) {
-        setRoomInfo((prev) => prev ? { ...prev, is_online: isOnline } : null);
-      }
-    });
+  setRoomInfo((prev) => {
+    if (prev && prev.friend_id === userId) {
+      return { ...prev, is_online: isOnline };
+    }
+    return prev;
+  });
+});
   };
 
   const fetchMessages = async () => {
