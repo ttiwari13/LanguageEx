@@ -20,17 +20,31 @@ setTimeout(() => {
 
 dotenv.config();
 const app = express();
-app.use(cors({
-  origin: [
-    "https://langex.netlify.app",
-    "https://69318d92057fd115e31ab2b9--langex.netlify.app",
-    "http://localhost:5173",
-    "http://localhost:3000"
-  ],
+// Dynamic CORS configuration
+const allowedOrigins = [
+  "https://langex.netlify.app",
+  "http://localhost:5173",
+  "http://localhost:3000"
+];
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list or is a Netlify preview
+    if (allowedOrigins.includes(origin) || origin.includes('--langex.netlify.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
   credentials: true,
   allowedHeaders: ["Content-Type", "Authorization"]
-}));
+};
+
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
@@ -40,21 +54,25 @@ const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
     origin: [
-    "https://langex.netlify.app",
-    "https://69318d92057fd115e31ab2b9--langex.netlify.app",
-    "http://localhost:5173",
-    "http://localhost:3000"
-  ],
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"]
+      "https://langex.netlify.app",
+      "https://69318d92057fd115e31ab2b9--langex.netlify.app",
+      "https://69319ee897d8fe0008bc30c7--langex.netlify.app",
+      "http://localhost:5173",
+      "http://localhost:3000"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
   }
 });
 
 let userSockets = new Map(); 
 let socketUsers = new Map(); 
+
+// Helper function to notify friends about status change
 const notifyFriendsAboutStatus = async (userId, isOnline) => {
   try {
+    // Get all friends of this user
     const query = `
       SELECT 
         CASE 
@@ -65,12 +83,13 @@ const notifyFriendsAboutStatus = async (userId, isOnline) => {
       WHERE (user_id = $1 OR friend_id = $1) AND status = 'accepted'
     `;
     const result = await pool.query(query, [userId]);
-  
+    
+    // Notify each friend
     result.rows.forEach(row => {
       const friendSocketId = userSockets.get(row.friend_id);
       if (friendSocketId) {
         io.to(friendSocketId).emit("user-status-change", { userId, isOnline });
-        console.log(`Notified friend ${row.friend_id} about user ${userId} status: ${isOnline}`);
+        console.log(`✅ Notified friend ${row.friend_id} about user ${userId} status: ${isOnline}`);
       }
     });
   } catch (error) {
@@ -86,9 +105,11 @@ io.on("connection", (socket) => {
     socketUsers.set(socket.id, userId);
     
     await User.updateOnlineStatus(userId, true);
+    
+    // Notify all friends that this user is now online
     await notifyFriendsAboutStatus(userId, true);
     
-    console.log(`User ${userId} is now online with socket ${socket.id}`);
+    console.log(`✅ User ${userId} is now online with socket ${socket.id}`);
   });
   
   socket.on("join-chat-room", async (chatRoomId) => {
@@ -107,19 +128,23 @@ io.on("connection", (socket) => {
         if (roomQuery.rows.length > 0) {
           const room = roomQuery.rows[0];
           const friendId = room.user1_id === userId ? room.user2_id : room.user1_id;
+          
+          // Check if friend is online
           const isOnline = userSockets.has(friendId);
           socket.emit("user-status-change", { userId: friendId, isOnline });
-          console.log(`Sent initial status for friend ${friendId}: ${isOnline}`);
+          console.log(`📤 Sent initial status for friend ${friendId}: ${isOnline}`);
         }
       }
     } catch (error) {
       console.error("Error sending initial status:", error);
     }
   });
+  
+  // Handle explicit status request
   socket.on("request-user-status", async (targetUserId) => {
     const isOnline = userSockets.has(targetUserId);
     socket.emit("user-status-change", { userId: targetUserId, isOnline });
-    console.log(`Status request for user ${targetUserId}: ${isOnline}`);
+    console.log(`📤 Status request for user ${targetUserId}: ${isOnline}`);
   });
   
   socket.on("send-message", (messageData) => {
@@ -201,12 +226,14 @@ io.on("connection", (socket) => {
 
     if (userId) {
       await User.updateOnlineStatus(userId, false);
+      
+      // Notify all friends that this user is now offline
       await notifyFriendsAboutStatus(userId, false);
       
       userSockets.delete(userId);
       socketUsers.delete(socket.id);
       
-      console.log(`User ${userId} disconnected`);
+      console.log(`❌ User ${userId} disconnected`);
     }
   });
 });
