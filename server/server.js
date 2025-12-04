@@ -21,9 +21,15 @@ setTimeout(() => {
 dotenv.config();
 const app = express();
 app.use(cors({
-  origin: ["http://localhost:3000","https://69318d92057fd115e31ab2b9--langex.netlify.app/"],
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true
+  origin: [
+    "https://langex.netlify.app",
+    "https://69318d92057fd115e31ab2b9--langex.netlify.app", // Preview build
+    "http://localhost:5173",
+    "http://localhost:3000"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 app.use(express.json());
@@ -33,9 +39,15 @@ app.get("/", (req, res) => res.send("Server running"));
 const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
-    origin: ["http://localhost:3000","https://69318d92057fd115e31ab2b9--langex.netlify.app/"],
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: [
+    "https://langex.netlify.app",
+    "https://69318d92057fd115e31ab2b9--langex.netlify.app", // Preview build
+    "http://localhost:5173",
+    "http://localhost:3000"
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+  credentials: true,
+  allowedHeaders: ["Content-Type", "Authorization"]
   }
 });
 let userSockets = new Map(); 
