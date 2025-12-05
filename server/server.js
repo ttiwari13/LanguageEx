@@ -55,9 +55,6 @@ const io = socketio(server, {
   cors: {
     origin: [
       "https://langex.netlify.app",
-      "https://69318d92057fd115e31ab2b9--langex.netlify.app",
-      "https://69319ee897d8fe0008bc30c7--langex.netlify.app",
-      "https://6931e895fb327500086204df--langex.netlify.app/",
       "http://localhost:5173",
       "http://localhost:3000"
     ],
