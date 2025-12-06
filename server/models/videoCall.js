@@ -1,5 +1,3 @@
-const pool = require("../configs/db");
-
 const videoCall = {
   async initTable() {
     try {
@@ -22,10 +20,13 @@ const videoCall = {
         CREATE INDEX IF NOT EXISTS idx_video_calls_status ON video_calls(status);
         CREATE INDEX IF NOT EXISTS idx_video_calls_created ON video_calls(created_at DESC);
       `);
+
+      console.log("video_calls table initialized");
     } catch (error) {
       console.error("video_calls table initialization error:", error);
     }
   },
+
   async createVideoCall(chatRoomId, callerId, receiverId) {
     try {
       const result = await pool.query(
@@ -42,6 +43,7 @@ const videoCall = {
       throw error;
     }
   },
+
   async updateCallStatus(callId, status, endedAt = null) {
     try {
       let query = `UPDATE video_calls SET status = $1`;
@@ -62,6 +64,7 @@ const videoCall = {
       throw error;
     }
   },
+
   async getCallHistory(chatRoomId) {
     try {
       const result = await pool.query(
@@ -84,6 +87,7 @@ const videoCall = {
     }
   }
 };
+
 videoCall.initTable();
 
 module.exports = videoCall;

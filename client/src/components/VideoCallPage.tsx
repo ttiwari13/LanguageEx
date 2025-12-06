@@ -47,10 +47,6 @@ const VideoCallPage = () => {
     try {
       // Initialize socket with API_URL
       socket = io(API_URL);
-      const userId = localStorage.getItem("userId");
-      if (userId) {
-        socket.emit("user-online", parseInt(userId));
-      }
 
       // Get local media stream
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -188,12 +184,6 @@ const VideoCallPage = () => {
     // Listen for call failure
     socket.on("call-failed", ({ message }: { message: string }) => {
       alert(message || "Call failed");
-      endCall();
-    });
-
-    // Listen for user offline
-    socket.on("user-offline-call", () => {
-      alert(`${state.friendName} is offline`);
       endCall();
     });
   };

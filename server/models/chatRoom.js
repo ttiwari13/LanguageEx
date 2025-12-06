@@ -1,3 +1,4 @@
+// ============================================
 const pool = require("../configs/db");
 
 const ChatRoom = {
@@ -87,8 +88,6 @@ const ChatRoom = {
           u.name as friend_name,
           u.username as friend_username,
           u.profile_image_public_id,
-          u.is_online,
-          u.last_seen,
           vc.last_call_time
         FROM chat_rooms cr
         JOIN users u ON (
@@ -158,15 +157,16 @@ const ChatRoom = {
       throw error;
     }
   },
-async getChatRoomByUsers(user1Id, user2Id) {
-  const result = await pool.query(
-    `SELECT * FROM chat_rooms 
-     WHERE (user1_id = $1 AND user2_id = $2)
-        OR (user1_id = $2 AND user2_id = $1)`,
-    [user1Id, user2Id]
-  );
-  return result.rows[0] || null;
-}
+
+  async getChatRoomByUsers(user1Id, user2Id) {
+    const result = await pool.query(
+      `SELECT * FROM chat_rooms 
+       WHERE (user1_id = $1 AND user2_id = $2)
+          OR (user1_id = $2 AND user2_id = $1)`,
+      [user1Id, user2Id]
+    );
+    return result.rows[0] || null;
+  }
 };
 
 ChatRoom.initTable();

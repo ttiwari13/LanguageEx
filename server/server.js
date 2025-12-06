@@ -52,7 +52,7 @@ app.get("/", (req, res) => res.send("Server running"));
 
 const server = http.createServer(app);
 
-// UPDATED SOCKET.IO CORS - THIS IS THE FIX
+// Socket.IO CORS configuration
 const io = socketio(server, {
   cors: {
     origin: (origin, callback) => {
@@ -71,85 +71,23 @@ const io = socketio(server, {
   }
 });
 
+// Store user sockets for video calling and messaging
 let userSockets = new Map(); 
 let socketUsers = new Map(); 
-
-// Helper function to notify friends about status change
-const notifyFriendsAboutStatus = async (userId, isOnline) => {
-  try {
-    // Get all friends of this user
-    const query = `
-      SELECT 
-        CASE 
-          WHEN user_id = $1 THEN friend_id 
-          ELSE user_id 
-        END as friend_id
-      FROM friendships
-      WHERE (user_id = $1 OR friend_id = $1) AND status = 'accepted'
-    `;
-    const result = await pool.query(query, [userId]);
-    
-    // Notify each friend
-    result.rows.forEach(row => {
-      const friendSocketId = userSockets.get(row.friend_id);
-      if (friendSocketId) {
-        io.to(friendSocketId).emit("user-status-change", { userId, isOnline });
-        console.log(`Notified friend ${row.friend_id} about user ${userId} status: ${isOnline}`);
-      }
-    });
-  } catch (error) {
-    console.error("Error notifying friends about status:", error);
-  }
-};
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id);
   
-  socket.on("user-online", async (userId) => {
+  // Store socket mapping when user identifies themselves (optional - only needed for video calls)
+  socket.on("register-user", (userId) => {
     userSockets.set(userId, socket.id);
     socketUsers.set(socket.id, userId);
-    
-    await User.updateOnlineStatus(userId, true);
-    
-    // Notify all friends that this user is now online
-    await notifyFriendsAboutStatus(userId, true);
-    
-    console.log(`User ${userId} is now online with socket ${socket.id}`);
+    console.log(`User ${userId} registered with socket ${socket.id}`);
   });
   
-  socket.on("join-chat-room", async (chatRoomId) => {
+  socket.on("join-chat-room", (chatRoomId) => {
     socket.join(`room-${chatRoomId}`);
     console.log(`Socket ${socket.id} joined room-${chatRoomId}`);
-    
-    // Send current online status of the friend in this chat room
-    try {
-      const userId = socketUsers.get(socket.id);
-      if (userId) {
-        const roomQuery = await pool.query(
-          `SELECT user1_id, user2_id FROM chat_rooms WHERE id = $1`,
-          [chatRoomId]
-        );
-        
-        if (roomQuery.rows.length > 0) {
-          const room = roomQuery.rows[0];
-          const friendId = room.user1_id === userId ? room.user2_id : room.user1_id;
-          
-          // Check if friend is online
-          const isOnline = userSockets.has(friendId);
-          socket.emit("user-status-change", { userId: friendId, isOnline });
-          console.log(`Sent initial status for friend ${friendId}: ${isOnline}`);
-        }
-      }
-    } catch (error) {
-      console.error("Error sending initial status:", error);
-    }
-  });
-  
-  // Handle explicit status request
-  socket.on("check-user-status", async (targetUserId) => {
-    const isOnline = userSockets.has(targetUserId);
-    socket.emit("user-status-change", { userId: targetUserId, isOnline });
-    console.log(`Status request for user ${targetUserId}: ${isOnline}`);
   });
   
   socket.on("send-message", (messageData) => {
@@ -172,13 +110,26 @@ io.on("connection", (socket) => {
     io.to(`room-${chatRoomId}`).emit("chat-history-cleared");
   });
   
+  // Video call events
   socket.on("call-user", async ({ callerId, receiverId, chatRoomId, offer }) => {
     console.log(`Call from ${callerId} to ${receiverId} in room ${chatRoomId}`);
+    
+    // Register caller if not already registered
+    if (!userSockets.has(callerId)) {
+      userSockets.set(callerId, socket.id);
+      socketUsers.set(socket.id, callerId);
+    }
+    
     const receiverSocketId = userSockets.get(receiverId);
     
     if (!receiverSocketId) {
-      console.log(`Receiver ${receiverId} is offline`);
-      socket.emit("call-failed", { message: "User is offline" });
+      console.log(`Receiver ${receiverId} not connected to socket, but call can still be attempted`);
+      // Still try to send the call - receiver might connect soon
+      io.emit("incoming-call", {
+        callerId,
+        chatRoomId,
+        offer,
+      });
       return;
     }
 
@@ -226,19 +177,15 @@ io.on("connection", (socket) => {
     }
   });
   
-  socket.on("disconnect", async () => {
+  socket.on("disconnect", () => {
     const userId = socketUsers.get(socket.id);
 
     if (userId) {
-      await User.updateOnlineStatus(userId, false);
-      
-      // Notify all friends that this user is now offline
-      await notifyFriendsAboutStatus(userId, false);
-      
       userSockets.delete(userId);
       socketUsers.delete(socket.id);
-      
-      console.log(`User ${userId} disconnected`);
+      console.log(`User ${userId} disconnected from socket ${socket.id}`);
+    } else {
+      console.log(`Socket ${socket.id} disconnected`);
     }
   });
 });
@@ -251,5 +198,5 @@ app.use("/api/chats", chatRoutes);
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
-  console.log(` Server running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
