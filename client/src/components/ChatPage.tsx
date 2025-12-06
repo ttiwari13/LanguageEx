@@ -114,63 +114,73 @@ const ChatPage = () => {
     return () => document.removeEventListener('click', handleClickOutside);
   }, [contextMenuMessageId]);
 
-  const initializeChat = async () => {
-    // Only create socket if it doesn't exist
-    if (!socketRef.current) {
-      socketRef.current = io(API_URL, {
-        transports: ['websocket', 'polling'],
-        reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-      });
+ const initializeChat = async () => {
+  setLoading(true);
+  
+  // Setup socket FIRST before any data fetching
+  if (!socketRef.current) {
+    socketRef.current = io(API_URL, {
+      transports: ['websocket'],
+      upgrade: false,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+    });
+    
+    // Setup listeners BEFORE connecting
+    setupSocketListeners();
+    
+    socketRef.current.on('connect', () => {
+      console.log('Socket connected:', socketRef.current?.id);
       
-      socketRef.current.on('connect', () => {
-        console.log('Socket connected:', socketRef.current?.id);
-        
-        const userId = localStorage.getItem("userId");
-        if (userId) {
-          socketRef.current?.emit("user-online", parseInt(userId));
-          console.log('Emitted user-online for userId:', userId);
-        }
+      const userId = localStorage.getItem("userId");
+      if (userId) {
+        socketRef.current?.emit("user-online", parseInt(userId));
+        console.log(' Emitted user-online for userId:', userId);
+      }
 
-        socketRef.current?.emit("join-chat-room", chatRoomId);
-        console.log('Joined chat room:', chatRoomId);
-      });
+      socketRef.current?.emit("join-chat-room", chatRoomId);
+      console.log('Joined chat room:', chatRoomId);
+      
+      // Request status updates AFTER joining room
+      if (roomInfo?.friend_id) {
+        console.log(' Requesting status for friend:', roomInfo.friend_id);
+        socketRef.current?.emit("check-user-status", roomInfo.friend_id);
+      }
+    });
 
-      socketRef.current.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
-      });
+    socketRef.current.on('connect_error', (error) => {
+      console.error(' Socket connection error:', error);
+    });
 
-      socketRef.current.on('disconnect', (reason) => {
-        console.log('Socket disconnected:', reason);
-      });
+    socketRef.current.on('disconnect', (reason) => {
+      console.log(' Socket disconnected:', reason);
+    });
+  }
 
-      setupSocketListeners();
-    }
-
-    // Fetch initial data
-    await Promise.all([fetchMessages(), fetchRoomInfo()]);
-    
-    // After room info is loaded, request fresh status
-    if (socketRef.current && roomInfo) {
-      console.log('Requesting status for friend:', roomInfo.friend_id);
-      socketRef.current.emit("check-user-status", roomInfo.friend_id);
-    }
-    
-    setLoading(false);
-  };
+  // Fetch data AFTER socket is ready
+  await Promise.all([fetchMessages(), fetchRoomInfo()]);
+  
+  // Request fresh status after room info is loaded
+  if (socketRef.current?.connected && roomInfo) {
+    console.log(' Requesting fresh status for friend:', roomInfo.friend_id);
+    socketRef.current.emit("check-user-status", roomInfo.friend_id);
+  }
+  
+  setLoading(false);
+};
 
   const setupSocketListeners = () => {
     if (!socketRef.current) return;
 
     socketRef.current.on("new-message", (message: Message) => {
-      console.log('Received new message:', message);
+      console.log(' Received new message:', message);
       setMessages((prev) => [...prev, message]);
       scrollToBottom();
     });
 
     socketRef.current.on("message-deleted", ({ messageId }: { messageId: number }) => {
-      console.log('Message deleted:', messageId);
+      console.log(' Message deleted:', messageId);
       setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
     });
 
@@ -183,33 +193,33 @@ const ChatPage = () => {
     });
 
     socketRef.current.on("user-status-change", ({ userId, isOnline }: { userId: number; isOnline: boolean }) => {
-      console.log(`Status change received: User ${userId} is now ${isOnline ? 'ONLINE ✅' : 'OFFLINE ❌'}`);
+      console.log(` Status change received: User ${userId} is now ${isOnline ? 'ONLINE ✅' : 'OFFLINE ❌'}`);
       
       setRoomInfo((prev) => {
         if (!prev) {
-          console.log('No room info available yet');
+          console.log(' No room info available yet');
           return prev;
         }
-        
-        console.log(`Friend ID: ${prev.friend_id}, Received userId: ${userId}`);
+      
+        console.log(` Friend ID: ${prev.friend_id}, Received userId: ${userId}`);
         
         if (prev.friend_id === userId) {
-          console.log(`Updating status from ${prev.is_online} to ${isOnline}`);
+          console.log(` Updating status from ${prev.is_online} to ${isOnline}`);
           return { ...prev, is_online: isOnline };
         }
         
-        console.log(`Not updating - different user (Friend: ${prev.friend_id}, Update for: ${userId})`);
+        console.log(` Not updating - different user (Friend: ${prev.friend_id}, Update for: ${userId})`);
         return prev;
       });
     });
 
     // New listener for status response
     socketRef.current.on("user-status-response", ({ userId, isOnline }: { userId: number; isOnline: boolean }) => {
-      console.log(`Status response: User ${userId} is ${isOnline ? 'ONLINE ✅' : 'OFFLINE ❌'}`);
+      console.log(` Status response: User ${userId} is ${isOnline ? 'ONLINE ✅' : 'OFFLINE ❌'}`);
       
       setRoomInfo((prev) => {
         if (prev && prev.friend_id === userId) {
-          console.log(`Updating status from ${prev.is_online} to ${isOnline}`);
+          console.log(` Updating status from ${prev.is_online} to ${isOnline}`);
           return { ...prev, is_online: isOnline };
         }
         return prev;
@@ -217,7 +227,7 @@ const ChatPage = () => {
     });
 
     socketRef.current.on("incoming-call", ({ callerId, chatRoomId: incomingChatRoomId, offer }) => {
-      console.log('Incoming call from:', callerId);
+      console.log(' Incoming call from:', callerId);
       
       const confirmCall = window.confirm(`Incoming video call from ${roomInfo?.friend_name}. Accept?`);
       
@@ -236,16 +246,16 @@ const ChatPage = () => {
     });
 
     socketRef.current.on("call-failed", ({ message }) => {
-      console.error('Call failed:', message);
+      console.error(' Call failed:', message);
       alert(message);
     });
 
     socketRef.current.on("call-accepted", ({ answer }) => {
-      console.log('Call accepted with answer:', answer);
+      console.log(' Call accepted with answer:', answer);
     });
 
     socketRef.current.on("call-rejected", () => {
-      console.log('Call was rejected');
+      console.log(' Call was rejected');
       alert('Call was rejected by the other user');
     });
   };
@@ -265,33 +275,32 @@ const ChatPage = () => {
   };
 
   const fetchRoomInfo = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const res = await axios.get(`${API_URL}/api/chats`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+  try {
+    const token = localStorage.getItem("token");
+    const res = await axios.get(`${API_URL}/api/chats`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    
+    const room = res.data.chatRooms.find(
+      (r: ChatRoomInfo) => r.chat_room_id === parseInt(chatRoomId!)
+    );
+    
+    if (room) {
+      setRoomInfo(room);
+      console.log(' Room info loaded:', room);
+      console.log(` Friend: ${room.friend_name} (ID: ${room.friend_id})`);
+      console.log(` Initial status: ${room.is_online ? 'ONLINE' : 'OFFLINE'}`);
       
-      const room = res.data.chatRooms.find(
-        (r: ChatRoomInfo) => r.chat_room_id === parseInt(chatRoomId!)
-      );
-      
-      if (room) {
-        setRoomInfo(room);
-        console.log('Room info loaded:', room);
-        console.log(`Friend: ${room.friend_name} (ID: ${room.friend_id})`);
-        console.log(`Initial status: ${room.is_online ? 'ONLINE' : 'OFFLINE'}`);
-        
-        // Request fresh status after room info is loaded
-        if (socketRef.current && socketRef.current.connected) {
-          console.log('Requesting fresh status for friend:', room.friend_id);
-          socketRef.current.emit("check-user-status", room.friend_id);
-        }
+      // Request fresh status immediately after setting room info
+      if (socketRef.current?.connected) {
+        console.log(' Requesting fresh status for friend:', room.friend_id);
+        socketRef.current.emit("check-user-status", room.friend_id);
       }
-    } catch (err) {
-      console.error("Error fetching room info:", err);
     }
-  };
-
+  } catch (err) {
+    console.error("Error fetching room info:", err);
+  }
+};
   const sendMessage = async () => {
     if (!newMessage.trim() || isSending) return;
 

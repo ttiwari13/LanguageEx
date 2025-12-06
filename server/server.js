@@ -130,7 +130,7 @@ io.on("connection", (socket) => {
           // Check if friend is online
           const isOnline = userSockets.has(friendId);
           socket.emit("user-status-change", { userId: friendId, isOnline });
-          console.log(`📤 Sent initial status for friend ${friendId}: ${isOnline}`);
+          console.log(`Sent initial status for friend ${friendId}: ${isOnline}`);
         }
       }
     } catch (error) {
@@ -139,10 +139,10 @@ io.on("connection", (socket) => {
   });
   
   // Handle explicit status request
-  socket.on("request-user-status", async (targetUserId) => {
+  socket.on("check-user-status", async (targetUserId) => {
     const isOnline = userSockets.has(targetUserId);
     socket.emit("user-status-change", { userId: targetUserId, isOnline });
-    console.log(`📤 Status request for user ${targetUserId}: ${isOnline}`);
+    console.log(`Status request for user ${targetUserId}: ${isOnline}`);
   });
   
   socket.on("send-message", (messageData) => {
