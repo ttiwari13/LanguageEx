@@ -10,6 +10,7 @@ interface LocationState {
   friendName: string;
   isReceiver: boolean;
   offer?: RTCSessionDescriptionInit;
+  callId?: number;
 }
 
 let socket: Socket;
@@ -45,8 +46,38 @@ const VideoCallPage = () => {
 
   const initializeCall = async () => {
     try {
-      // Initialize socket with API_URL
-      socket = io(API_URL);
+      console.log("Initializing call...");
+      
+      // FIXED: Initialize socket with proper config
+      socket = io(API_URL, {
+        transports: ['websocket'],
+        upgrade: false,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+      });
+
+      // FIXED: Wait for socket connection before proceeding
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error("Socket connection timeout"));
+        }, 5000);
+
+        if (socket.connected) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          socket.on('connect', () => {
+            console.log("Socket connected:", socket.id);
+            clearTimeout(timeout);
+            resolve();
+          });
+          socket.on('connect_error', (error) => {
+            clearTimeout(timeout);
+            reject(error);
+          });
+        }
+      });
 
       // Get local media stream
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -63,11 +94,11 @@ const VideoCallPage = () => {
       // Setup WebRTC
       setupPeerConnection(stream);
 
-      // Setup socket listeners BEFORE initiating/accepting call
+      // Setup socket listeners
       setupSocketListeners();
 
-      // Small delay to ensure socket listeners are ready
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Give a small delay for listeners to be ready
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // If caller, initiate call
       if (!state.isReceiver) {
@@ -88,25 +119,32 @@ const VideoCallPage = () => {
       iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
-        // Free TURN server (consider getting your own for production)
+        { urls: "stun:stun2.l.google.com:19302" },
         {
           urls: "turn:openrelay.metered.ca:80",
           username: "openrelayproject",
           credential: "openrelayproject",
         },
+        {
+          urls: "turn:openrelay.metered.ca:443",
+          username: "openrelayproject",
+          credential: "openrelayproject",
+        },
       ],
+      iceCandidatePoolSize: 10,
     };
 
     peerConnection = new RTCPeerConnection(configuration);
 
     // Add local stream tracks
     stream.getTracks().forEach((track) => {
+      console.log("Adding track:", track.kind);
       peerConnection!.addTrack(track, stream);
     });
 
     // Handle incoming tracks
     peerConnection.ontrack = (event) => {
-      console.log("Received remote track");
+      console.log("Received remote track:", event.track.kind);
       if (remoteVideoRef.current && event.streams[0]) {
         remoteVideoRef.current.srcObject = event.streams[0];
         setCallStatus("Connected");
@@ -140,10 +178,20 @@ const VideoCallPage = () => {
     // Handle ICE connection state
     peerConnection.oniceconnectionstatechange = () => {
       console.log("ICE connection state:", peerConnection?.iceConnectionState);
+      if (peerConnection?.iceConnectionState === "failed") {
+        console.error("ICE connection failed");
+      }
+    };
+
+    // Handle signaling state changes
+    peerConnection.onsignalingstatechange = () => {
+      console.log("Signaling state:", peerConnection?.signalingState);
     };
   };
 
   const setupSocketListeners = () => {
+    console.log("Setting up socket listeners");
+
     // Listen for call acceptance
     socket.on("call-accepted", async ({ answer }: { answer: RTCSessionDescriptionInit }) => {
       console.log("Call accepted, setting remote description");
@@ -171,6 +219,7 @@ const VideoCallPage = () => {
 
     // Listen for call rejection
     socket.on("call-rejected", () => {
+      console.log("Call rejected");
       alert(`${state.friendName} declined your call`);
       endCall();
     });
@@ -183,7 +232,15 @@ const VideoCallPage = () => {
 
     // Listen for call failure
     socket.on("call-failed", ({ message }: { message: string }) => {
+      console.error("Call failed:", message);
       alert(message || "Call failed");
+      endCall();
+    });
+
+    // FIXED: Handle errors
+    socket.on("error", (error: any) => {
+      console.error("Socket error:", error);
+      alert("Connection error occurred");
       endCall();
     });
   };
@@ -197,15 +254,21 @@ const VideoCallPage = () => {
         return;
       }
 
+      console.log("Creating offer...");
       const offer = await peerConnection.createOffer({
         offerToReceiveAudio: true,
         offerToReceiveVideo: true,
       });
       
       await peerConnection.setLocalDescription(offer);
+      console.log("Local description set");
 
       const userId = localStorage.getItem("userId");
-      console.log("Emitting call-user event");
+      console.log("Emitting call-user event", {
+        callerId: parseInt(userId!),
+        receiverId: state.friendId,
+        chatRoomId: parseInt(chatRoomId!),
+      });
       
       socket.emit("call-user", {
         callerId: parseInt(userId!),
@@ -229,10 +292,13 @@ const VideoCallPage = () => {
         return;
       }
 
+      console.log("Setting remote description from offer");
       await peerConnection.setRemoteDescription(new RTCSessionDescription(state.offer));
 
+      console.log("Creating answer...");
       const answer = await peerConnection.createAnswer();
       await peerConnection.setLocalDescription(answer);
+      console.log("Local description set with answer");
 
       console.log("Emitting accept-call event");
       socket.emit("accept-call", {
@@ -268,9 +334,25 @@ const VideoCallPage = () => {
     }
   };
 
-  const endCall = () => {
+  const endCall = async () => {
     console.log("Ending call");
     
+    // FIXED: Notify backend to end call in database
+    if (state.callId) {
+      try {
+        const token = localStorage.getItem("token");
+        await fetch(`${API_URL}/api/chats/video-call/${state.callId}/end`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      } catch (error) {
+        console.error("Error updating call status:", error);
+      }
+    }
+
     if (socket && socket.connected) {
       socket.emit("end-call", {
         targetUserId: state.friendId,
@@ -283,6 +365,8 @@ const VideoCallPage = () => {
   };
 
   const cleanup = () => {
+    console.log("Cleaning up resources");
+
     // Stop all tracks
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach((track) => {
@@ -299,6 +383,7 @@ const VideoCallPage = () => {
 
     // Disconnect socket
     if (socket && socket.connected) {
+      socket.removeAllListeners();
       socket.disconnect();
     }
   };
@@ -324,13 +409,14 @@ const VideoCallPage = () => {
         />
 
         {/* Placeholder when no remote video */}
-        {callStatus === "Calling..." && (
+        {(callStatus === "Calling..." || callStatus === "Connecting...") && (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
             <div className="text-center">
               <div className="w-24 h-24 mx-auto mb-4 bg-gray-700 rounded-full flex items-center justify-center">
                 <Video size={40} className="text-gray-400" />
               </div>
-              <p className="text-gray-400">Calling {state?.friendName}...</p>
+              <p className="text-gray-400">{callStatus}</p>
+              <p className="text-gray-500 text-sm mt-2">{state?.friendName}</p>
             </div>
           </div>
         )}

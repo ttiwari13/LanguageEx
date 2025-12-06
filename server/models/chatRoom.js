@@ -1,4 +1,3 @@
-// ============================================
 const pool = require("../configs/db");
 
 const ChatRoom = {

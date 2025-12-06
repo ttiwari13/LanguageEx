@@ -333,39 +333,48 @@ const chatController = {
     }
   },
 
-  async initiateVideoCall(req, res) {
-    try {
-      const { chatRoomId } = req.params;
-      const callerId = req.user.id;
+// Add this enhanced version to your chatController.js
+async initiateVideoCall(req, res) {
+  try {
+    const { chatRoomId } = req.params;
+    const callerId = req.user.id;
 
-      const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, callerId);
-      if (!isAllowed) {
-        return res.status(403).json({ error: "Access denied" });
-      }
+    console.log("DEBUG: chatRoomId =", chatRoomId);
+    console.log("DEBUG: callerId =", callerId);
+    console.log("DEBUG: VideoCall module =", VideoCall);
 
-      const chatRoom = await ChatRoom.getChatRoomById(chatRoomId);
-      const receiverId =
-        chatRoom.user1_id === callerId
-          ? chatRoom.user2_id
-          : chatRoom.user1_id;
-
-      const videoCall = await VideoCall.createVideoCall(
-        chatRoomId,
-        callerId,
-        receiverId
-      );
-
-      res.json({
-        success: true,
-        message: "Video call initiated",
-        videoCall,
-      });
-
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+    const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, callerId);
+    if (!isAllowed) {
+      return res.status(403).json({ error: "Access denied" });
     }
-  },
 
+    const chatRoom = await ChatRoom.getChatRoomById(chatRoomId);
+    console.log("DEBUG: chatRoom =", chatRoom);
+    
+    const receiverId =
+      chatRoom.user1_id === callerId
+        ? chatRoom.user2_id
+        : chatRoom.user1_id;
+
+    console.log("DEBUG: About to call VideoCall.createVideoCall");
+    const videoCall = await VideoCall.createVideoCall(
+      chatRoomId,
+      callerId,
+      receiverId
+    );
+
+    res.json({
+      success: true,
+      message: "Video call initiated",
+      videoCall,
+    });
+
+  } catch (error) {
+    console.error("FULL ERROR:", error);
+    console.error("ERROR STACK:", error.stack);
+    res.status(500).json({ error: error.message });
+  }
+},
   async endVideoCall(req, res) {
     try {
       const { callId } = req.params;

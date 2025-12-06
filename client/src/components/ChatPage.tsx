@@ -313,31 +313,32 @@ const ChatPage = () => {
     }, 1000);
   };
 
+  // FIXED: Changed from /call to /video-call to match the route
   const startVideoCall = async () => {
-  try {
-    const token = localStorage.getItem("token");
-    
-    const response = await axios.post(
-      `${API_URL}/api/chats/${chatRoomId}/call`,  // Changed from /video-call to /call
-      {},
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    try {
+      const token = localStorage.getItem("token");
+      
+      const response = await axios.post(
+        `${API_URL}/api/chats/${chatRoomId}/video-call`,  // FIXED: Changed from /call
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    console.log('Video call initiated:', response.data);
+      console.log('Video call initiated:', response.data);
 
-    navigate(`/video-call/${chatRoomId}`, {
-      state: {
-        friendId: roomInfo?.friend_id,
-        friendName: roomInfo?.friend_name,
-        isReceiver: false,
-        callId: response.data.videoCall.id,
-      }
-    });
-  } catch (error) {
-    console.error('Error initiating video call:', error);
-    alert('Failed to start video call');
-  }
-};
+      navigate(`/video-call/${chatRoomId}`, {
+        state: {
+          friendId: roomInfo?.friend_id,
+          friendName: roomInfo?.friend_name,
+          isReceiver: false,
+          callId: response.data.videoCall.id,
+        }
+      });
+    } catch (error) {
+      console.error('Error initiating video call:', error);
+      alert('Failed to start video call');
+    }
+  };
 
   const scrollToBottom = () => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);

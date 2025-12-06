@@ -13,10 +13,7 @@ const chatRoutes = require("./routes/chatRoutes");
 const User = require("./models/User"); 
 const ChatRoom = require("./models/chatRoom"); 
 const Message = require("./models/Message");
-
-setTimeout(() => {
-  const VideoCall = require("./models/videoCall");
-}, 1000);
+const VideoCall = require("./models/videoCall"); // ✅ Load immediately
 
 dotenv.config();
 const app = express();
@@ -171,7 +168,6 @@ io.on("connection", (socket) => {
       io.to(targetSocketId).emit("call-ended");
     }
     if (callId) {
-      const VideoCall = require("./models/videoCall");
       VideoCall.updateCallStatus(callId, "completed", new Date())
         .catch(err => console.error("Error updating call status:", err));
     }
