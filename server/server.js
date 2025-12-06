@@ -20,6 +20,7 @@ setTimeout(() => {
 
 dotenv.config();
 const app = express();
+
 // Dynamic CORS configuration
 const allowedOrigins = [
   "https://langex.netlify.app",
@@ -33,7 +34,7 @@ const corsOptions = {
     if (!origin) return callback(null, true);
     
     // Check if origin is in allowed list or is a Netlify preview
-    if (allowedOrigins.includes(origin) || origin.includes('--langex.netlify.app')) {
+    if (allowedOrigins.includes(origin) || (origin && origin.includes('.netlify.app'))) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -45,22 +46,28 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
 app.use(express.json());
 
 app.get("/", (req, res) => res.send("Server running"));
 
 const server = http.createServer(app);
+
+// UPDATED SOCKET.IO CORS - THIS IS THE FIX
 const io = socketio(server, {
   cors: {
-    origin: [
-      "https://langex.netlify.app",
-      "http://localhost:5173",
-      "http://localhost:3000"
-    ],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Check if origin is in allowed list or is a Netlify preview
+      if (allowedOrigins.includes(origin) || (origin && origin.includes('.netlify.app'))) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-    credentials: true,
-    allowedHeaders: ["Content-Type", "Authorization"]
+    credentials: true
   }
 });
 
@@ -87,7 +94,7 @@ const notifyFriendsAboutStatus = async (userId, isOnline) => {
       const friendSocketId = userSockets.get(row.friend_id);
       if (friendSocketId) {
         io.to(friendSocketId).emit("user-status-change", { userId, isOnline });
-        console.log(`✅ Notified friend ${row.friend_id} about user ${userId} status: ${isOnline}`);
+        console.log(`Notified friend ${row.friend_id} about user ${userId} status: ${isOnline}`);
       }
     });
   } catch (error) {
@@ -107,7 +114,7 @@ io.on("connection", (socket) => {
     // Notify all friends that this user is now online
     await notifyFriendsAboutStatus(userId, true);
     
-    console.log(`✅ User ${userId} is now online with socket ${socket.id}`);
+    console.log(`User ${userId} is now online with socket ${socket.id}`);
   });
   
   socket.on("join-chat-room", async (chatRoomId) => {
@@ -231,7 +238,7 @@ io.on("connection", (socket) => {
       userSockets.delete(userId);
       socketUsers.delete(socket.id);
       
-      console.log(`❌ User ${userId} disconnected`);
+      console.log(`User ${userId} disconnected`);
     }
   });
 });
@@ -244,5 +251,5 @@ app.use("/api/chats", chatRoutes);
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(` Server running on port ${PORT}`);
 });
