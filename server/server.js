@@ -184,6 +184,12 @@ io.on("connection", (socket) => {
       console.log(`Socket ${socket.id} disconnected`);
     }
   });
+socket.on("video-toggled", ({ targetUserId, videoEnabled }) => {
+  const targetSocketId = userSockets.get(targetUserId);
+  if (targetSocketId) {
+    io.to(targetSocketId).emit("remote-video-toggled", { videoEnabled });
+  }
+});
 });
 
 app.use("/api/users", authRoutes);

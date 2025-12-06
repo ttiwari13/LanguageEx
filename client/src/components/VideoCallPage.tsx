@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
-import { PhoneOff, Mic, MicOff, Video, VideoOff, AlertCircle } from "lucide-react";
+import { PhoneOff, Mic, MicOff, Video, VideoOff } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -8,6 +8,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 interface LocationState {
   friendId: number;
   friendName: string;
+  friendProfileImage?: string;
   isReceiver: boolean;
   offer?: RTCSessionDescriptionInit;
   callId?: number;
@@ -23,10 +24,9 @@ const VideoCallPage = () => {
   const state = location.state as LocationState;
 
   const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
-  const [callStatus, setCallStatus] = useState<string>("Initializing...");
-  const [permissionError, setPermissionError] = useState<string>("");
-  const [showPermissionHelp, setShowPermissionHelp] = useState(false);
+  const [isVideoOff, setIsVideoOff] = useState(true); // Start with video OFF
+  const [remoteVideoOff, setRemoteVideoOff] = useState(true); // Remote user's video state
+  const [callStatus, setCallStatus] = useState<string>("Connecting...");
 
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
@@ -50,147 +50,36 @@ const VideoCallPage = () => {
     };
   }, []);
 
-  const checkPermissions = async () => {
-    try {
-      // Check if permissions API is supported
-      if (!navigator.permissions) {
-        console.warn("Permissions API not supported");
-        return { camera: "prompt", microphone: "prompt" };
-      }
-
-      const cameraPermission = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      const micPermission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-      
-      console.log("Camera permission:", cameraPermission.state);
-      console.log("Microphone permission:", micPermission.state);
-      
-      return {
-        camera: cameraPermission.state,
-        microphone: micPermission.state
-      };
-    } catch (error) {
-      console.warn("Could not check permissions:", error);
-      return { camera: "prompt", microphone: "prompt" };
-    }
-  };
-
-  const requestMediaWithRetry = async (constraints: MediaStreamConstraints, retryCount = 0): Promise<MediaStream> => {
-    try {
-      console.log(`Attempt ${retryCount + 1}: Requesting media with constraints:`, constraints);
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log("✅ Media stream obtained:", stream.getTracks().map(t => `${t.kind}: ${t.label}`));
-      return stream;
-    } catch (error: any) {
-      console.error(`Attempt ${retryCount + 1} failed:`, error);
-      
-      // If first attempt with high quality fails, try with basic constraints
-      if (retryCount === 0 && (error.name === 'OverconstrainedError' || error.name === 'NotFoundError')) {
-        console.log("Retrying with basic constraints...");
-        return requestMediaWithRetry(
-          { video: true, audio: true },
-          retryCount + 1
-        );
-      }
-      
-      throw error;
-    }
-  };
-
   const initializeCall = async () => {
     try {
-      console.log("=== INITIALIZING VIDEO CALL ===");
-      console.log("State:", state);
-      console.log("User Agent:", navigator.userAgent);
-      console.log("Is HTTPS:", window.location.protocol === 'https:');
+      console.log("=== INITIALIZING AUDIO CALL ===");
       
-      // Check current permissions
-      const permissions = await checkPermissions();
-      console.log("Current permissions:", permissions);
-      
-      if (permissions.camera === 'denied' || permissions.microphone === 'denied') {
-        setShowPermissionHelp(true);
-        throw new Error("Camera or microphone access was previously denied. Please reset permissions in your browser settings.");
-      }
-
-      // Check if getUserMedia is available
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Your browser doesn't support camera/microphone access. Please use a modern browser like Chrome, Firefox, or Edge.");
-      }
-
-      // Request media with retry logic
-      setCallStatus("🎥 Requesting camera and microphone access...");
-      console.log("Requesting media permissions...");
+      // Start with AUDIO ONLY - no camera permission needed!
+      setCallStatus("Starting audio call...");
       
       let stream: MediaStream;
       try {
-        // First try with optimal settings
-        stream = await requestMediaWithRetry({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: "user"
-          },
+        // Request ONLY audio initially
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: false, // No video initially
           audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true
-          },
-        });
-      } catch (mediaError: any) {
-        console.error("❌ Media access error:", mediaError);
-        
-        let errorMessage = "Failed to access camera/microphone. ";
-        
-        if (mediaError.name === 'NotAllowedError' || mediaError.name === 'PermissionDeniedError') {
-          errorMessage = "🚫 Permission Denied!\n\nYou blocked camera/microphone access. To fix this:\n\n";
-          
-          if (navigator.userAgent.includes('Chrome')) {
-            errorMessage += "1. Click the 🔒 icon in the address bar\n2. Click 'Site settings'\n3. Allow Camera and Microphone\n4. Refresh the page";
-          } else if (navigator.userAgent.includes('Firefox')) {
-            errorMessage += "1. Click the 🔒 icon in the address bar\n2. Click 'More Information'\n3. Go to Permissions tab\n4. Allow Camera and Microphone\n5. Refresh the page";
-          } else {
-            errorMessage += "1. Check your browser settings\n2. Allow camera and microphone for this site\n3. Refresh the page";
           }
-          
-          setShowPermissionHelp(true);
-        } else if (mediaError.name === 'NotFoundError' || mediaError.name === 'DevicesNotFoundError') {
-          errorMessage = "❌ No camera or microphone found!\n\nPlease make sure:\n• A camera/microphone is connected\n• It's not being used by another application";
-        } else if (mediaError.name === 'NotReadableError' || mediaError.name === 'TrackStartError') {
-          errorMessage = "❌ Device is busy!\n\nYour camera or microphone is already in use by another application. Please close other apps and try again.";
-        } else if (mediaError.name === 'OverconstrainedError') {
-          errorMessage = "❌ Device doesn't meet requirements!\n\nYour camera/microphone doesn't support the required settings. Trying basic mode...";
-        } else if (mediaError.name === 'SecurityError') {
-          errorMessage = "🔒 Security Error!\n\nCamera access requires HTTPS connection or localhost.";
-        } else {
-          errorMessage = `❌ Error: ${mediaError.message || mediaError.name}`;
-        }
-        
-        setPermissionError(errorMessage);
-        alert(errorMessage);
+        });
+        console.log("✅ Audio access granted");
+      } catch (error: any) {
+        console.error("❌ Audio access error:", error);
+        alert("Failed to access microphone. Please check permissions.");
         navigate(-1);
         return;
       }
 
-      console.log("✅ Media access granted - Tracks:", stream.getTracks().map(t => ({
-        kind: t.kind,
-        label: t.label,
-        enabled: t.enabled,
-        readyState: t.readyState
-      })));
-
       localStreamRef.current = stream;
 
-      // Display local video
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        await localVideoRef.current.play().catch(e => console.error("Error playing local video:", e));
-        console.log("✅ Local video displayed");
-      }
-
       // Connect to socket
-      setCallStatus("Connecting to server...");
-      console.log("Connecting to socket...");
-      
+      setCallStatus("Connecting...");
       socket = io(API_URL, {
         transports: ['websocket', 'polling'],
         upgrade: true,
@@ -200,13 +89,10 @@ const VideoCallPage = () => {
       });
 
       await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error("Socket connection timeout"));
-        }, 10000);
+        const timeout = setTimeout(() => reject(new Error("Connection timeout")), 10000);
 
         if (socket.connected) {
           clearTimeout(timeout);
-          console.log("✅ Socket already connected:", socket.id);
           resolve();
         } else {
           socket.on('connect', () => {
@@ -216,49 +102,35 @@ const VideoCallPage = () => {
             const userId = localStorage.getItem("userId");
             if (userId) {
               socket.emit("register-user", parseInt(userId));
-              console.log("Registered user with socket:", userId);
             }
-            
             resolve();
           });
           
           socket.on('connect_error', (error) => {
             clearTimeout(timeout);
-            console.error("❌ Socket connection error:", error);
             reject(error);
           });
         }
       });
 
       // Setup WebRTC
-      console.log("Setting up WebRTC peer connection...");
       setupPeerConnection(stream);
-
-      // Setup socket listeners
-      console.log("Setting up socket listeners...");
       setupSocketListeners();
 
       await new Promise(resolve => setTimeout(resolve, 300));
 
       // Initiate or accept call
       if (!state.isReceiver) {
-        console.log("Acting as CALLER");
         setCallStatus("Calling...");
         await initiateCall();
       } else if (state.offer) {
-        console.log("Acting as RECEIVER");
         setCallStatus("Accepting call...");
         await acceptCall();
-      } else {
-        throw new Error("Missing offer for receiver");
       }
 
     } catch (error: any) {
       console.error("❌ Error initializing call:", error);
-      setCallStatus("Error: " + error.message);
-      if (!permissionError) {
-        alert("Failed to initialize call: " + error.message);
-      }
+      alert("Failed to initialize call: " + error.message);
       navigate(-1);
     }
   };
@@ -278,20 +150,23 @@ const VideoCallPage = () => {
     };
 
     peerConnection = new RTCPeerConnection(configuration);
-    console.log("✅ Peer connection created");
 
     stream.getTracks().forEach((track) => {
-      console.log("Adding track to peer connection:", track.kind, track.label);
       peerConnection!.addTrack(track, stream);
     });
 
     peerConnection.ontrack = (event) => {
       console.log("✅ Received remote track:", event.track.kind);
-      if (remoteVideoRef.current && event.streams[0]) {
-        remoteVideoRef.current.srcObject = event.streams[0];
-        remoteVideoRef.current.play().catch(e => console.error("Error playing remote video:", e));
-        setCallStatus("Connected");
+      
+      if (event.track.kind === 'video') {
+        setRemoteVideoOff(false);
+        if (remoteVideoRef.current && event.streams[0]) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+          remoteVideoRef.current.play().catch(e => console.error("Error playing:", e));
+        }
       }
+      
+      setCallStatus("Connected");
     };
 
     peerConnection.onicecandidate = (event) => {
@@ -305,13 +180,8 @@ const VideoCallPage = () => {
 
     peerConnection.onconnectionstatechange = () => {
       const connState = peerConnection?.connectionState;
-      console.log("Connection state:", connState);
-      
-      if (connState === "connected") {
-        setCallStatus("Connected");
-      } else if (connState === "disconnected") {
-        setCallStatus("Disconnected");
-      } else if (connState === "failed") {
+      if (connState === "connected") setCallStatus("Connected");
+      else if (connState === "failed") {
         setCallStatus("Connection failed");
         setTimeout(() => endCall(), 2000);
       }
@@ -320,7 +190,6 @@ const VideoCallPage = () => {
 
   const setupSocketListeners = () => {
     socket.on("call-accepted", async ({ answer }) => {
-      console.log("✅ Call accepted");
       if (peerConnection && answer) {
         await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
         setCallStatus("Connected");
@@ -339,9 +208,15 @@ const VideoCallPage = () => {
     });
 
     socket.on("call-ended", () => endCall());
+    
     socket.on("call-failed", ({ message }) => {
       alert(message || "Call failed");
       endCall();
+    });
+
+    // Listen for remote user's video state changes
+    socket.on("remote-video-toggled", ({ videoEnabled }) => {
+      setRemoteVideoOff(!videoEnabled);
     });
   };
 
@@ -349,7 +224,7 @@ const VideoCallPage = () => {
     if (!peerConnection) return;
     const offer = await peerConnection.createOffer({
       offerToReceiveAudio: true,
-      offerToReceiveVideo: true,
+      offerToReceiveVideo: true, // Still receive video if other person enables
     });
     await peerConnection.setLocalDescription(offer);
     
@@ -381,12 +256,86 @@ const VideoCallPage = () => {
     }
   };
 
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      const videoTrack = localStreamRef.current.getVideoTracks()[0];
-      if (videoTrack) {
-        videoTrack.enabled = !videoTrack.enabled;
-        setIsVideoOff(!videoTrack.enabled);
+  const toggleVideo = async () => {
+    try {
+      if (isVideoOff) {
+        // Turn ON video - request camera permission
+        console.log("Requesting camera access...");
+        const videoStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          }
+        });
+
+        const videoTrack = videoStream.getVideoTracks()[0];
+        
+        if (peerConnection) {
+          // Replace audio-only with audio+video
+          const sender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) {
+            await sender.replaceTrack(videoTrack);
+          } else {
+            peerConnection.addTrack(videoTrack, localStreamRef.current!);
+          }
+        }
+
+        // Add video track to local stream
+        if (localStreamRef.current) {
+          localStreamRef.current.addTrack(videoTrack);
+        }
+
+        // Display local video
+        if (localVideoRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current;
+          await localVideoRef.current.play();
+        }
+
+        setIsVideoOff(false);
+        
+        // Notify remote user
+        socket.emit("video-toggled", {
+          targetUserId: state.friendId,
+          videoEnabled: true
+        });
+        
+        console.log("✅ Video enabled");
+      } else {
+        // Turn OFF video
+        if (localStreamRef.current) {
+          const videoTrack = localStreamRef.current.getVideoTracks()[0];
+          if (videoTrack) {
+            videoTrack.stop();
+            localStreamRef.current.removeTrack(videoTrack);
+            
+            // Remove from peer connection
+            if (peerConnection) {
+              const sender = peerConnection.getSenders().find(s => s.track === videoTrack);
+              if (sender) {
+                peerConnection.removeTrack(sender);
+              }
+            }
+          }
+        }
+        
+        setIsVideoOff(true);
+        
+        // Notify remote user
+        socket.emit("video-toggled", {
+          targetUserId: state.friendId,
+          videoEnabled: false
+        });
+        
+        console.log("Video disabled");
+      }
+    } catch (error: any) {
+      console.error("Error toggling video:", error);
+      if (error.name === 'NotAllowedError') {
+        alert("Camera permission denied. Please allow camera access to enable video.");
+      } else if (error.name === 'NotReadableError') {
+        alert("Camera is being used by another application. Please close other apps and try again.");
+      } else {
+        alert("Failed to toggle video: " + error.message);
       }
     }
   };
@@ -423,93 +372,101 @@ const VideoCallPage = () => {
     }
   };
 
-  if (showPermissionHelp) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-        <div className="max-w-md bg-gray-900 rounded-2xl p-8 text-center">
-          <AlertCircle size={64} className="mx-auto mb-4 text-red-500" />
-          <h2 className="text-2xl font-bold mb-4">Permission Required</h2>
-          <p className="text-gray-400 mb-6 whitespace-pre-line text-left">{permissionError}</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="w-full px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-full transition font-semibold"
-          >
-            Go Back
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      <div className="p-4 bg-gray-900 flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 text-white flex flex-col">
+      {/* Header */}
+      <div className="p-4 bg-black/50 backdrop-blur-sm flex items-center justify-between border-b border-gray-800">
         <div>
           <h2 className="text-xl font-semibold">{state?.friendName || "Unknown"}</h2>
           <p className="text-sm text-gray-400">{callStatus}</p>
         </div>
       </div>
 
-      <div className="flex-1 relative">
-        <video
-          ref={remoteVideoRef}
-          autoPlay
-          playsInline
-          className="w-full h-full object-cover bg-gray-900"
-        />
-
-        {callStatus !== "Connected" && (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+      {/* Main Call Area */}
+      <div className="flex-1 flex items-center justify-center relative">
+        {/* Remote User Display */}
+        <div className="relative w-full h-full flex items-center justify-center">
+          {remoteVideoOff ? (
+            // Show profile picture when video is off
             <div className="text-center">
-              <div className="w-24 h-24 mx-auto mb-4 bg-gray-700 rounded-full flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+              <div className="w-40 h-40 mx-auto mb-6 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-2xl">
+                {state?.friendProfileImage ? (
+                  <img 
+                    src={state.friendProfileImage} 
+                    alt={state?.friendName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-6xl font-bold text-white">
+                    {state?.friendName?.charAt(0).toUpperCase()}
+                  </span>
+                )}
               </div>
+              <p className="text-2xl font-semibold mb-2">{state?.friendName}</p>
               <p className="text-gray-400">{callStatus}</p>
-              <p className="text-gray-500 text-sm mt-2">{state?.friendName}</p>
             </div>
-          </div>
-        )}
+          ) : (
+            // Show remote video when enabled
+            <video
+              ref={remoteVideoRef}
+              autoPlay
+              playsInline
+              className="w-full h-full object-cover"
+            />
+          )}
 
-        <div className="absolute top-4 right-4 w-48 h-36 bg-gray-800 rounded-lg overflow-hidden shadow-lg border-2 border-gray-700">
-          <video
-            ref={localVideoRef}
-            autoPlay
-            playsInline
-            muted
-            className="w-full h-full object-cover"
-          />
+          {/* Local Video (Picture-in-Picture) */}
+          {!isVideoOff && (
+            <div className="absolute bottom-6 right-6 w-48 h-36 bg-gray-800 rounded-2xl overflow-hidden shadow-2xl border-2 border-gray-700">
+              <video
+                ref={localVideoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
+          
+          {/* Local Profile Picture when video is off */}
           {isVideoOff && (
-            <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
-              <VideoOff size={32} className="text-gray-400" />
+            <div className="absolute bottom-6 right-6 w-32 h-32 bg-gray-800 rounded-full overflow-hidden shadow-2xl border-4 border-gray-700 flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-br from-green-500 to-teal-600 flex items-center justify-center">
+                <span className="text-4xl font-bold text-white">You</span>
+              </div>
             </div>
           )}
         </div>
       </div>
 
-      <div className="p-6 bg-gray-900 flex justify-center gap-4">
+      {/* Controls */}
+      <div className="p-8 bg-black/50 backdrop-blur-sm flex justify-center gap-6 border-t border-gray-800">
         <button
           onClick={toggleMute}
-          className={`p-4 rounded-full transition ${
+          className={`p-5 rounded-full transition-all shadow-lg transform hover:scale-110 ${
             isMuted ? "bg-red-600 hover:bg-red-500" : "bg-gray-700 hover:bg-gray-600"
           }`}
+          title={isMuted ? "Unmute" : "Mute"}
         >
-          {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+          {isMuted ? <MicOff size={28} /> : <Mic size={28} />}
         </button>
 
         <button
           onClick={toggleVideo}
-          className={`p-4 rounded-full transition ${
-            isVideoOff ? "bg-red-600 hover:bg-red-500" : "bg-gray-700 hover:bg-gray-600"
+          className={`p-5 rounded-full transition-all shadow-lg transform hover:scale-110 ${
+            isVideoOff ? "bg-gray-700 hover:bg-gray-600" : "bg-blue-600 hover:bg-blue-500"
           }`}
+          title={isVideoOff ? "Turn on camera" : "Turn off camera"}
         >
-          {isVideoOff ? <VideoOff size={24} /> : <Video size={24} />}
+          {isVideoOff ? <VideoOff size={28} /> : <Video size={28} />}
         </button>
 
         <button
           onClick={endCall}
-          className="p-4 rounded-full bg-red-600 hover:bg-red-500 transition"
+          className="p-5 rounded-full bg-red-600 hover:bg-red-500 transition-all shadow-lg transform hover:scale-110"
+          title="End call"
         >
-          <PhoneOff size={24} />
+          <PhoneOff size={28} />
         </button>
       </div>
     </div>
