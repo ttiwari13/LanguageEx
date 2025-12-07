@@ -238,7 +238,7 @@ const VideoCallPage = () => {
     console.log("🎧 Setting up socket listeners");
 
     // For receivers: listen for incoming call
-    socket.on("incoming-call", async ({ callerId, callerName, offer, callId, callerProfileImage }) => {
+    socket.on("incoming-call", async ({ callerId, callerName, offer, callId }) => {
       console.log("📞 INCOMING CALL EVENT RECEIVED");
       console.log("Caller ID:", callerId, "Caller Name:", callerName);
       console.log("Call ID:", callId);
