@@ -107,36 +107,40 @@ const VideoCallPage = () => {
           clearTimeout(timeout);
           console.log("✅ Socket connected:", socket.id);
           
-          // Get userId - try different methods
-          let userId = localStorage.getItem("userId") || localStorage.getItem("user_id");
+          // Try multiple sources for userId
+          let userId = localStorage.getItem("userId");
           
-          // If not found, try extracting from token
+          // If not in localStorage, try to get from state or extract from token
           if (!userId) {
-            try {
+            // Try getting from state (passed from previous page)
+            userId = state.friendId ? localStorage.getItem("user_id") : null;
+            
+            // Try parsing from token as last resort
+            if (!userId) {
               const token = localStorage.getItem("token");
-              if (token && token.includes('.')) {
-                const parts = token.split('.');
-                if (parts.length === 3) {
-                  const payload = JSON.parse(atob(parts[1]));
-                  userId = String(payload.userId || payload.id || payload.sub || '');
+              if (token) {
+                try {
+                  const payload = JSON.parse(atob(token.split('.')[1]));
+                  userId = payload.userId || payload.id || payload.sub;
+                  // Save it for future use
                   if (userId) {
-                    localStorage.setItem("userId", userId);
-                    console.log("✅ Extracted userId from token:", userId);
+                    localStorage.setItem("userId", userId.toString());
                   }
+                } catch (e) {
+                  console.error("Failed to parse token:", e);
                 }
               }
-            } catch (e) {
-              console.error("Error extracting userId from token:", e);
             }
           }
           
           if (userId) {
             console.log("📡 Registering user:", userId);
             socket.emit("register-user", parseInt(userId));
+            
+            // Give server time to register
             setTimeout(() => resolve(), 500);
           } else {
-            console.error("❌ No userId found - please log in again");
-            reject(new Error("User authentication required. Please log in again."));
+            reject(new Error("No userId found in localStorage or token"));
           }
         };
 
@@ -350,26 +354,22 @@ const VideoCallPage = () => {
       await peerConnection.setLocalDescription(offer);
       console.log("✅ Offer created and set as local description");
       
-      // Get userId
-      let userId = localStorage.getItem("userId") || localStorage.getItem("user_id");
-      
+      // Get userId with fallback
+      let userId = localStorage.getItem("userId");
       if (!userId) {
-        try {
-          const token = localStorage.getItem("token");
-          if (token && token.includes('.')) {
-            const parts = token.split('.');
-            if (parts.length === 3) {
-              const payload = JSON.parse(atob(parts[1]));
-              userId = String(payload.userId || payload.id || payload.sub || '');
-            }
+        const token = localStorage.getItem("token");
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            userId = (payload.userId || payload.id || payload.sub)?.toString();
+          } catch (e) {
+            console.error("Failed to get userId from token");
           }
-        } catch (e) {
-          console.error("Error getting userId:", e);
         }
       }
       
       if (!userId) {
-        throw new Error("Cannot initiate call: User not authenticated");
+        throw new Error("Cannot initiate call: User ID not found");
       }
       
       console.log("📡 Emitting call-user event");
@@ -412,26 +412,22 @@ const VideoCallPage = () => {
       console.log("Setting local description");
       await peerConnection.setLocalDescription(answer);
       
-      // Get userId
-      let userId = localStorage.getItem("userId") || localStorage.getItem("user_id");
-      
+      // Get userId with fallback
+      let userId = localStorage.getItem("userId");
       if (!userId) {
-        try {
-          const token = localStorage.getItem("token");
-          if (token && token.includes('.')) {
-            const parts = token.split('.');
-            if (parts.length === 3) {
-              const payload = JSON.parse(atob(parts[1]));
-              userId = String(payload.userId || payload.id || payload.sub || '');
-            }
+        const token = localStorage.getItem("token");
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            userId = (payload.userId || payload.id || payload.sub)?.toString();
+          } catch (e) {
+            console.error("Failed to get userId from token");
           }
-        } catch (e) {
-          console.error("Error getting userId:", e);
         }
       }
       
       if (!userId) {
-        throw new Error("Cannot accept call: User not authenticated");
+        throw new Error("Cannot accept call: User ID not found");
       }
       
       console.log("📡 Emitting accept-call event");
