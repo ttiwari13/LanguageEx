@@ -64,11 +64,11 @@ const io = socketio(server, {
 });
 
 io.on("connection", (socket) => {
-  console.log("✅ User connected:", socket.id);
+  console.log("User connected:", socket.id);
   
   socket.on("join-chat-room", (chatRoomId) => {
     socket.join(`room-${chatRoomId}`);
-    console.log(`🚪 Socket ${socket.id} joined room-${chatRoomId}`);
+    console.log(`Socket ${socket.id} joined room-${chatRoomId}`);
   });
   
   socket.on("send-message", (messageData) => {
@@ -92,7 +92,7 @@ io.on("connection", (socket) => {
   });
   
   socket.on("disconnect", () => {
-    console.log(`👋 Socket ${socket.id} disconnected`);
+    console.log(` Socket ${socket.id} disconnected`);
   });
 });
 
@@ -104,5 +104,5 @@ app.use("/api/chats", chatRoutes);
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(` Server running on port ${PORT}`);
 });

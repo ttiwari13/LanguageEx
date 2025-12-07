@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-import { Video, Edit, Search, Trash2 } from "lucide-react";
+import { Video, Search, Trash2 } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -182,13 +182,6 @@ const MessagesPage = () => {
       <div className="p-4 border-b border-gray-800">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">Messages</h1>
-          <button 
-            onClick={() => navigate("/search-users")}
-            className="p-2 hover:bg-gray-800 rounded-full transition"
-            title="New message"
-          >
-            <Edit size={20} />
-          </button>
         </div>
 
         <div className="relative">
@@ -206,9 +199,6 @@ const MessagesPage = () => {
       <div className="flex-1 overflow-y-auto">
         {filteredChats.length === 0 ? (
           <div className="text-center text-gray-400 mt-20 px-4">
-            <div className="w-20 h-20 mx-auto mb-4 rounded-full border-2 border-gray-700 flex items-center justify-center">
-              <Edit size={32} className="text-gray-600" />
-            </div>
             <p className="text-xl font-semibold mb-2">
               {searchQuery ? "No chats found" : "Your messages"}
             </p>
