@@ -333,51 +333,88 @@ const chatController = {
     }
   },
 
-// Add this enhanced version to your chatController.js
-async initiateVideoCall(req, res) {
-  try {
-    const { chatRoomId } = req.params;
-    const callerId = req.user.id;
+  // Enhanced video call initiation with complete receiver info
+  async initiateVideoCall(req, res) {
+    try {
+      const { chatRoomId } = req.params;
+      const callerId = req.user.id;
 
-    console.log("DEBUG: chatRoomId =", chatRoomId);
-    console.log("DEBUG: callerId =", callerId);
-    console.log("DEBUG: VideoCall module =", VideoCall);
+      console.log("📞 Initiating video call:");
+      console.log("  - Chat Room ID:", chatRoomId);
+      console.log("  - Caller ID:", callerId);
 
-    const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, callerId);
-    if (!isAllowed) {
-      return res.status(403).json({ error: "Access denied" });
-    }
+      // Verify caller has access to this chat room
+      const isAllowed = await ChatRoom.isUserInChatRoom(chatRoomId, callerId);
+      if (!isAllowed) {
+        return res.status(403).json({ error: "Access denied to this chat room" });
+      }
 
-    const chatRoom = await ChatRoom.getChatRoomById(chatRoomId);
-    console.log("DEBUG: chatRoom =", chatRoom);
-    
-    const receiverId =
-      chatRoom.user1_id === callerId
-        ? chatRoom.user2_id
+      // Get chat room details
+      const chatRoom = await ChatRoom.getChatRoomById(chatRoomId);
+      if (!chatRoom) {
+        return res.status(404).json({ error: "Chat room not found" });
+      }
+
+      console.log("  - Chat room found:", chatRoom);
+      
+      // Determine receiver ID
+      const receiverId = chatRoom.user1_id === callerId 
+        ? chatRoom.user2_id 
         : chatRoom.user1_id;
 
-    console.log("DEBUG: About to call VideoCall.createVideoCall");
-    const videoCall = await VideoCall.createVideoCall(
-      chatRoomId,
-      callerId,
-      receiverId
-    );
+      console.log("  - Receiver ID:", receiverId);
 
-    res.json({
-      success: true,
-      message: "Video call initiated",
-      videoCall,
-    });
+      // Get receiver's full information
+      const receiverResult = await pool.query(
+        `SELECT id, name, profile_image_public_id FROM users WHERE id = $1`,
+        [receiverId]
+      );
 
-  } catch (error) {
-    console.error("FULL ERROR:", error);
-    console.error("ERROR STACK:", error.stack);
-    res.status(500).json({ error: error.message });
-  }
-},
+      if (receiverResult.rows.length === 0) {
+        return res.status(404).json({ error: "Receiver not found" });
+      }
+
+      const receiver = receiverResult.rows[0];
+      console.log("  - Receiver info:", receiver.name);
+
+      // Create video call record in database
+      const videoCall = await VideoCall.createVideoCall(
+        chatRoomId,
+        callerId,
+        receiverId
+      );
+
+      console.log("✅ Video call record created:", videoCall.id);
+
+      // Return complete information for the frontend
+      res.json({
+        success: true,
+        message: "Video call initiated",
+        videoCall: {
+          ...videoCall,
+          receiver: {
+            id: receiver.id,
+            name: receiver.name,
+            profileImage: generateCloudinaryUrl(receiver.profile_image_public_id)
+          }
+        }
+      });
+
+    } catch (error) {
+      console.error("❌ Error initiating video call:", error);
+      console.error("Stack trace:", error.stack);
+      res.status(500).json({ 
+        error: error.message,
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  },
+
   async endVideoCall(req, res) {
     try {
       const { callId } = req.params;
+
+      console.log("📴 Ending video call:", callId);
 
       const updatedCall = await VideoCall.updateCallStatus(
         callId,
@@ -385,12 +422,16 @@ async initiateVideoCall(req, res) {
         new Date()
       );
 
+      console.log("✅ Call ended successfully");
+
       res.json({
         success: true,
+        message: "Video call ended",
         videoCall: updatedCall,
       });
 
     } catch (error) {
+      console.error("❌ Error ending video call:", error);
       res.status(500).json({ error: error.message });
     }
   },
