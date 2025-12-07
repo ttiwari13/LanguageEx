@@ -6,7 +6,6 @@ import Messages from "./components/Messages";
 import Friends from "./components/Friends";
 import DiscoverDashboard from "./components/DiscoverDashbaord"; 
 import MainLayout from "./layouts/MainLayout";
-import VideoCallPage from "./components/VideoCallPage";
 import ChatPage from "./components/ChatPage";
 import ProtectedRoute, { PublicRoute } from "./components/ProtectedRoute";
 
@@ -52,14 +51,6 @@ function App() {
             element={
               <ProtectedRoute>
                 <ChatPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/video-call/:chatRoomId"
-            element={
-              <ProtectedRoute>
-                <VideoCallPage />
               </ProtectedRoute>
             }
           />

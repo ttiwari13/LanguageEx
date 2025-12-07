@@ -28,8 +28,4 @@ router.delete("/:chatRoomId/messages/:messageId", authMiddleware, chatController
 router.post("/:chatRoomId/audio", authMiddleware, upload.single("audio"), chatController.sendAudioMessage);
 router.delete("/:chatRoomId/messages/:messageId/audio", authMiddleware, chatController.deleteAudioMessage);
 router.get("/:chatRoomId/unread", authMiddleware, chatController.getUnreadCount);
-router.post("/:chatRoomId/video-call", authMiddleware, chatController.initiateVideoCall);
-router.put("/video-call/:callId/end", authMiddleware, chatController.endVideoCall);
-router.get("/:chatRoomId/call-history", authMiddleware, chatController.getCallHistory);
-
 module.exports = router;

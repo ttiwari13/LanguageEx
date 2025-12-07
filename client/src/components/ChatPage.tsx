@@ -4,7 +4,6 @@ import axios from "axios";
 import { io, Socket } from "socket.io-client";
 
 import { 
-  Video, 
   Send, 
   ArrowLeft, 
   Info,
@@ -131,18 +130,6 @@ const ChatPage = () => {
     });
     socketRef.current.on("user-typing", () => setIsTyping(true));
     socketRef.current.on("user-stopped-typing", () => setIsTyping(false));
-    socketRef.current.on("incoming-call", ({ callerId, chatRoomId: incomingChatRoomId, offer }) => {
-      const confirmCall = window.confirm(`Incoming video call from ${roomInfo?.friend_name}. Accept?`);
-      if (confirmCall) {
-        navigate(`/video-call/${incomingChatRoomId}`, {
-          state: { friendId: callerId, friendName: roomInfo?.friend_name, isReceiver: true, offer }
-        });
-      } else {
-        socketRef.current?.emit("reject-call", { callerId });
-      }
-    });
-    socketRef.current.on("call-failed", ({ message }) => alert(message));
-    socketRef.current.on("call-rejected", () => alert('Call was rejected'));
   };
 
   const fetchMessages = async () => {
@@ -313,33 +300,6 @@ const ChatPage = () => {
     }, 1000);
   };
 
-  // FIXED: Changed from /call to /video-call to match the route
-  const startVideoCall = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      
-      const response = await axios.post(
-        `${API_URL}/api/chats/${chatRoomId}/video-call`,  // FIXED: Changed from /call
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      console.log('Video call initiated:', response.data);
-
-      navigate(`/video-call/${chatRoomId}`, {
-        state: {
-          friendId: roomInfo?.friend_id,
-          friendName: roomInfo?.friend_name,
-          isReceiver: false,
-          callId: response.data.videoCall.id,
-        }
-      });
-    } catch (error) {
-      console.error('Error initiating video call:', error);
-      alert('Failed to start video call');
-    }
-  };
-
   const scrollToBottom = () => {
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
   };
@@ -374,9 +334,6 @@ const ChatPage = () => {
           <div className="flex items-center gap-2">
             <button onClick={() => setShowClearChatModal(true)} className="p-2 hover:bg-gray-800 rounded-full transition" title="Clear Chat History">
               <Trash2 size={20} className="text-gray-400" />
-            </button>
-            <button onClick={startVideoCall} className="p-2 hover:bg-gray-800 rounded-full transition" title="Video Call">
-              <Video size={20} className="text-blue-500" />
             </button>
             <button className="p-2 hover:bg-gray-800 rounded-full transition">
               <Info size={20} />
