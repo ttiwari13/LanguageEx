@@ -27,13 +27,13 @@ LanguageEx is a text-based communication platform where users can connect with o
 
 ## Future Improvements
 
-1. **Video Calls**
+1. **Video Calls:**
    (Feature planned for future updates.)
-2. **AI-Based Match Suggestions**
+2. **AI-Based Match Suggestions:**
    Smarter partner recommendations based on profile data and interaction patterns.
-3. **Language Progress Tracking**
+3. **Language Progress Tracking:**
    Track improvement, vocabulary, and practice sessions.
-4. **Community Rooms**
+4. **Community Rooms:**
    Group-based language practice and discussions.
-5. **Time-Based Practice**
+5. **Time-Based Practice:**
    Spaced repetition and timed practice sessions for better learning efficiency.
