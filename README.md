@@ -23,6 +23,7 @@ LanguageEx is a text-based communication platform where users can connect with o
 * **Database:** PostgreSQL
 * **Auth:** JWT
 * **Real-time Messaging:** Socket.io
+* **Cloudinary**
 
 ## Future Improvements
 
